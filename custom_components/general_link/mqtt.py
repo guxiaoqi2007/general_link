@@ -5,9 +5,9 @@ import time
 from functools import lru_cache
 from typing import Any, Iterable, Callable
 
-from homeassistant.components.mqtt import MQTT_DISCONNECTED, PublishPayloadType, ReceiveMessage, CONF_KEEPALIVE, \
-    MQTT_CONNECTED
-from homeassistant.components.mqtt.client import _raise_on_error, TIMEOUT_ACK, SubscribePayloadType, Subscription, \
+from homeassistant.components.mqtt import PublishPayloadType, ReceiveMessage, CONF_KEEPALIVE, \
+    MQTT_CONNECTION_STATE
+from homeassistant.components.mqtt.client import TIMEOUT_ACK, SubscribePayloadType, Subscription, \
     _matcher_for_topic
 from homeassistant.components.mqtt.models import AsyncMessageCallbackType, MessageCallbackType
 from homeassistant.config_entries import ConfigEntry
@@ -133,7 +133,7 @@ class MqttClient:
             return
 
         self.connected = True
-        dispatcher_send(self.hass, MQTT_CONNECTED)
+        dispatcher_send(self.hass, MQTT_CONNECTION_STATE, True)
         _LOGGER.warning(
             "Connected to MQTT server %s:%s (%s)",
             self.conf[CONF_BROKER],
@@ -231,7 +231,7 @@ class MqttClient:
         """Disconnected callback."""
         _LOGGER.warning("Disconnected ===============================================================")
         self.connected = False
-        dispatcher_send(self.hass, MQTT_DISCONNECTED)
+        dispatcher_send(self.hass, MQTT_CONNECTION_STATE, False)
         _LOGGER.warning(
             "Disconnected from MQTT server %s:%s (%s)",
             self.conf[CONF_BROKER],
@@ -256,7 +256,7 @@ class MqttClient:
             mid: int | None = None
             result, mid = self._client.unsubscribe(topic)
             _LOGGER.debug("Unsubscribing from %s, mid: %s", topic, mid)
-            _raise_on_error(result)
+            _raise_on_errors(result)
             assert mid
             return mid
 
