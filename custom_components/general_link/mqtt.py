@@ -9,7 +9,7 @@ from homeassistant.components.mqtt import PublishPayloadType, ReceiveMessage, CO
     MQTT_CONNECTION_STATE
 from homeassistant.components.mqtt.client import TIMEOUT_ACK, SubscribePayloadType, Subscription, \
     _matcher_for_topic
-from homeassistant.components.mqtt.models import AsyncMessageCallbackType, MessageCallbackType
+from homeassistant.components.mqtt.models import  MessageCallbackType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT, CONF_USERNAME, CONF_PASSWORD
 from homeassistant.core import HomeAssistant, callback, HassJob
@@ -157,7 +157,7 @@ class MqttClient:
     async def async_subscribe(
             self,
             topic: str,
-            msg_callback: AsyncMessageCallbackType | MessageCallbackType,
+            msg_callback: MessageCallbackType,
             qos: int,
             encoding: str | None = None,
     ) -> Callable[[], None]:
