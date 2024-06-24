@@ -26,6 +26,14 @@ from .const import CONF_BROKER
 
 _LOGGER = logging.getLogger(__name__)
 
+def _raise_on_error(result_code: int) -> None:
+    """Raise error if error result."""
+    # pylint: disable-next=import-outside-toplevel
+    import paho.mqtt.client as mqtt
+
+    if result_code and (message := mqtt.error_string(result_code)):
+        raise HomeAssistantError(f"Error talking to MQTT: {message}")
+
 
 def _raise_on_errors(result_codes: Iterable[int | None]) -> None:
     """Raise error if error result."""
