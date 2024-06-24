@@ -264,7 +264,7 @@ class MqttClient:
             mid: int | None = None
             result, mid = self._client.unsubscribe(topic)
             _LOGGER.debug("Unsubscribing from %s, mid: %s", topic, mid)
-            _raise_on_errors(result)
+            _raise_on_error(result)
             assert mid
             return mid
 
