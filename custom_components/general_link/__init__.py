@@ -82,11 +82,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         while monitor_exec_flag and thread_id == global_thread_id:
             try:
-                # _LOGGER.warning("线程ID %s 全局ID %s", thread_id, global_thread_id)
+                _LOGGER.warning("线程ID %s 全局ID %s", thread_id, global_thread_id)
                 entry_data = entry.data
-                # status = connect_mqtt(entry_data[CONF_BROKER], entry_data[CONF_PORT]
-                #                      , entry_data[CONF_USERNAME], entry_data[CONF_PASSWORD])
-                # _LOGGER.warning("status：%s，hub.init_state：%s", status, hub.init_state)
+                status = connect_mqtt(entry_data[CONF_BROKER], entry_data[CONF_PORT]
+                                     , entry_data[CONF_USERNAME], entry_data[CONF_PASSWORD])
+                _LOGGER.warning("status：%s，hub.init_state：%s", status, hub.init_state)
                 mqtt_connected = hub.hass.data[MQTT_CLIENT_INSTANCE].connected
                 if not mqtt_connected or not hub.init_state:
                     hub.reconnect_flag = True
