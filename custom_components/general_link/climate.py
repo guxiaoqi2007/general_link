@@ -10,7 +10,7 @@ from homeassistant.components.climate import ClimateEntity, HVACMode, ClimateEnt
 from homeassistant.components.climate.const import HVAC_MODE_DRY, HVAC_MODE_AUTO, HVAC_MODE_FAN_ONLY
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import TEMP_CELSIUS, PRECISION_WHOLE
+from homeassistant.const import TEMP_CELSIUS, PRECISION_WHOLE,DEGREE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
@@ -60,7 +60,7 @@ class CustomClimate(ClimateEntity, ABC):
                         HVAC_MODE_AUTO]
 
     _attr_temperature_unit = TEMP_CELSIUS
-
+    
     _attr_max_temp = 30
 
     _attr_min_temp = 16
@@ -157,6 +157,10 @@ class CustomClimate(ClimateEntity, ABC):
         if "a19" in data:
             curr_temp = float(data["a19"])
             self._attr_current_temperature = curr_temp
+
+        if "a20" in data:
+            curr_hum = float(data["a20"])
+            self._attr_current_humidity = curr_hum
 
         if "a67" in data:
             fan_level = int(data["a67"])
