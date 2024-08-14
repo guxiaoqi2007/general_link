@@ -65,13 +65,17 @@ async def _async_send_receive_udp_broadcast(hass: HomeAssistant, data: dict, por
 
     try:
         while True:
-            hass.async_add_executor_job(sock.sendto(
-                data_bytes, (send_address, dest_port)))
+            #hass.async_add_executor_job(sock.sendto(data_bytes, (send_address, dest_port)))
+            sock.sendto(data_bytes, (send_address, dest_port))
             data, addr = await hass.async_add_executor_job(sock.recvfrom, 1024)
-            data_str = data.decode('utf-8')
-            data_dict = json.loads(data_str)
-            # _LOGGER.warning("data_dict1 %s", data_dict)
-            return data_dict
+            
+            
+            
+            if data is not None:
+                data_str = data.decode('utf-8')
+                data_dict = json.loads(data_str)
+                _LOGGER.debug("data_dict1 %s", data_dict)
+                return data_dict
     except socket.timeout:
         _LOGGER.warning("Timeout occurred while receiving data.")
     except Exception as e:
@@ -117,7 +121,7 @@ async def sender_receiver(hass: HomeAssistant, userid: str, password: str, place
         adapters = await network.async_get_adapters(hass)
 
         for adapter in adapters:
-            if adapter["enabled"] and (adapter["name"] == "eth0" or adapter["name"] == "wlan0" ) :
+            if adapter["enabled"] and (adapter["name"] == "eth0" or adapter["name"] == "wlan0"):
                 for ip_info in adapter["ipv4"]:
                     local_ip = ip_info["address"]
                     network_prefix = ip_info["network_prefix"]
@@ -128,8 +132,6 @@ async def sender_receiver(hass: HomeAssistant, userid: str, password: str, place
                         if data_dict is not None:
                             dest_address = str(ip)
                             break
-                    
-            
 
        # 判断下connection是否为空
             # 确保接收到的数据不为空
@@ -139,7 +141,7 @@ async def sender_receiver(hass: HomeAssistant, userid: str, password: str, place
         port = data_dict.get('port')
         username = data_dict.get('username')
         connection["name"] = f"IoT_Gateway-{place}"
-        connection["broker"]  = host
+        connection["broker"] = host
         connection["port"] = port
         connection["username"] = username
         connection[CONF_PLACE] = place
