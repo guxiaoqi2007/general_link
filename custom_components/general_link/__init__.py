@@ -103,7 +103,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # else:
         data = call.data.get("data")
 
-        await hub.async_mqtt_publish(topic, data, 2)
+        await hub.async_mqtt_publish(topic, data)
 
         # hass.states.set(f"{DOMAIN}.PUSH", payload)
 
