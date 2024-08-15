@@ -581,8 +581,8 @@ class Gateway:
                 self.init_state = False
                 _LOGGER.error("出了一些问题: %s", err)
 
-    async def async_mqtt_publish(self, topic: str, data: object):
-        return await self._async_mqtt_publish(self.hass, topic, data, seq=2)
+    async def async_mqtt_publish(self,topic: str, data: object):
+        return await self._async_mqtt_publish(topic, data, seq=4)
 
     async def _async_mqtt_publish(self, topic: str, data: object, seq=2):
 
