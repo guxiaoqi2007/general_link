@@ -4,20 +4,22 @@ import asyncio
 import json
 import logging
 import time
+import datetime
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, Event
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-
+from homeassistant.components.mqtt.const import CONF_CERTIFICATE
 from .mdns import MdnsScanner
 from .const import MQTT_CLIENT_INSTANCE, CONF_LIGHT_DEVICE_TYPE, EVENT_ENTITY_REGISTER, MQTT_TOPIC_PREFIX, \
-    EVENT_ENTITY_STATE_UPDATE, DEVICE_COUNT_MAX
+    EVENT_ENTITY_STATE_UPDATE, DEVICE_COUNT_MAX,TEMP_MQTT_TOPIC_PREFIX
 from .mqtt import MqttClient
 
 from homeassistant.helpers.storage import Store
 
 _LOGGER = logging.getLogger(__name__)
+INPUT_SCHEMA = ['a100','a101','a102','a103']
 
 
 class Gateway:
@@ -30,11 +32,20 @@ class Gateway:
         self._last_init_time = None
         
         self._id = entry.data[CONF_NAME]
-
+        
+        if "mqttAddr" in entry.data:
+            self.mqttAddr = entry.data["mqttAddr"]
+            self.mqttAddr1 = entry.data["mqttAddr"]
+            #_LOGGER.warning(f"mqttAddr:{self.mqttAddr}")
+        else :
+            self.mqttAddr = 0
+            self.mqttAddr1 = '+'
+        
+        
         self.light_group_map = {}
         self.room_map = {}
         # self.room_list = []
-        self.devTypes = [1, 2, 3, 4, 7, 9, 11]
+        self.devTypes = [1, 2, 3, 4, 7, 9, 11 ,16, 20]
 
         self.reconnect_flag = True
 
@@ -100,16 +111,27 @@ class Gateway:
                 await self._add_entity("button", device)
             elif device_type == 7:
                 """sensor"""
+                if "a121" in device:
+                    await self._add_entity("switch", device)
                 if "a14" in device:
                     await self._add_entity("sensor", device)
                 if "a15" in device:
                     await self._add_entity("binary_sensor", device)
+            elif device_type == 16:
+                if "a99" in device:
+                    await self._add_entity("binary_sensor", device)
+            elif device_type == 20:
+                if "a41" in device:
+                 await self._add_entity("switch", device)
+                if "a155" in device and "a158" in device:
+                 await self._add_entity("sensor", device)
+                
             elif device_type == 9:
                 """Constant Temperature Control Panel"""
                 a110 = int(device["a110"])
                 a111 = int(device["a111"])
                 a112 = int(device["a112"])
-                if a110 == 2 or a111 == 1:
+                if a110 == 1 or a110 == 2 or a111 == 1:
                     await self._add_entity("climate", device)
                 if a112 == 1:
                     await self._add_entity("fan", device)
@@ -139,6 +161,7 @@ class Gateway:
         if payload:
             try:
                 payload = json.loads(payload)
+                #_LOGGER.warning(f"topic:{topic} payload:{payload}")
 
                 # store = Store(self.hass, 1, f'test/{topic}')
                 # await store.async_save(payload["data"])
@@ -156,7 +179,7 @@ class Gateway:
             count = payload["data"]["count"]
             total = payload["data"]["total"]
 
-            _LOGGER.debug(f"q5 data:{payload}")
+            #_LOGGER.warning(f"q5 data:{payload}")
 
             """Device List data"""
             device_list = payload["data"]["list"]
@@ -169,7 +192,7 @@ class Gateway:
                         "max": DEVICE_COUNT_MAX,
                         "devTypes": self.devTypes,
                     }
-                    await self._async_mqtt_publish("P/0/center/q5", data, seq)
+                    await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, seq)
             elif seq == 2:
 
                 await self.report_q5_init(device_list)
@@ -179,7 +202,7 @@ class Gateway:
                         "max": DEVICE_COUNT_MAX,
                         "sns": self.sns,
                     }
-                    await self._async_mqtt_publish("P/0/center/q5", data, seq)
+                    await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, seq)
             elif seq == 3:
                 for device in device_list:
                     await self._exec_event_3(device)
@@ -203,8 +226,7 @@ class Gateway:
 
             string_array = ["sn", "workingTime", "powerSavings"]
             # 过滤不用查询的字段
-            string_filter = ["a109", "a15", "on",
-                             "rgb", "level", "kelvin", "travel"]
+            string_filter = ["a109", "a15", "travel","relays"]
 
             string_light_filter = ["on", "rgb", "level", "kelvin"]
 
@@ -213,14 +235,17 @@ class Gateway:
             sns = []
 
             for state in stats_list:
+                if any(key in state for key in string_light_filter):
+                    flag = True
+                    await self._exec_event_3(state)
+                    #_LOGGER.warning(f"event/3 data123:{state}")
 
-                if any(key in state for key in string_filter):
+                elif any(key in state for key in string_filter):
                     await self._exec_event_3(state)
                 else:
                     sns.append(state["sn"])
 
-                if any(key in state for key in string_light_filter):
-                    flag = True
+                
 
                 if "workingTime" in state or "powerSavings" in state:
                     for key in state.keys():
@@ -233,7 +258,7 @@ class Gateway:
                     "max": DEVICE_COUNT_MAX,
                     "sns": sns,
                 }
-                await self._async_mqtt_publish("P/0/center/q5", data, 3)
+                await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 3)
 
             _LOGGER.debug(f"event/3 data:{payload}")
 
@@ -284,7 +309,8 @@ class Gateway:
             room_map = self.room_map
             light_group_map = self.light_group_map
             seq = payload["seq"]
-            for roomObj in payload["data"]:
+            if seq == 1 or seq == 2:
+             for roomObj in payload["data"] :
                 if "a7" in roomObj:
                     room_id = roomObj["a8"]
 
@@ -355,6 +381,13 @@ class Gateway:
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]+"F"), data
                 )
+            elif data["devType"] == 16:
+                for i, inputname in enumerate(INPUT_SCHEMA,start=1):
+                    async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        f"{data['sn']}_{inputname}"), data
+                )
+
             elif data["devType"] == 7 :
                 async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
@@ -363,6 +396,24 @@ class Gateway:
                 async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]+"M"), data
+                )
+            elif data["devType"] == 20 :
+                async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        data["sn"]), data
+                )
+                
+                async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        data["sn"]+"V"), data
+                )
+                async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        data["sn"]+"C"), data
+                )
+                async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        data["sn"]+"E"), data
                 )
             else:
                 async_dispatcher_send(
@@ -446,10 +497,10 @@ class Gateway:
             })
         """
         if is_init:
-            await self._async_mqtt_publish("P/0/center/q82", data, 1)
+            await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 1)
             # await self._async_mqtt_publish("P/0/center/q51", data, 1)
         else:
-            await self._async_mqtt_publish("P/0/center/q82", data, 2)
+            await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 2)
            # await self._async_mqtt_publish("P/0/center/q51", data, 2)
 
     async def _add_entity(self, component: str, device: dict):
@@ -464,22 +515,25 @@ class Gateway:
         self._entry = entry
         discovery_topics = [
             # Subscribe to device list
-            f"{MQTT_TOPIC_PREFIX}/center/p5",
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p5",
             # Subscribe to scene list
-            f"{MQTT_TOPIC_PREFIX}/center/p28",
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p28",
             # Subscribe to all basic data Room list, light group list, curtain group list
-            f"{MQTT_TOPIC_PREFIX}/center/p33",
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p33",
             # Subscribe to room and light group relationship
             # f"{MQTT_TOPIC_PREFIX}/center/p31",
             # Subscribe to room and light group relationship
             # f"{MQTT_TOPIC_PREFIX}/center/p51",
             # Subscribe to room and light group relationship
-            f"{MQTT_TOPIC_PREFIX}/center/p82",
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p82",
             # Subscribe to device property change events
-            "p/+/event/3",
-            "p/+/event/4",
-            "p/+/event/5",
+            f"p/{self.mqttAddr1}/event/3",
+            f"p/{self.mqttAddr1}/event/4",
+            f"p/{self.mqttAddr1}/event/5",
         ]
+
+       # for subscribe_topic in discovery_topics:
+          #  self.hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
 
         try_connect_times = 3
 
@@ -534,9 +588,9 @@ class Gateway:
             _LOGGER.warning("start init data")
             self.init_state = True
             try:
-                #if is_init:
+                if is_init:
 
-                await asyncio.gather(
+                    await asyncio.gather(
                         *(
                             self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
                                 topic,
@@ -548,7 +602,7 @@ class Gateway:
                         )
                     )
                 # publish payload to get all basic data Room list, light group list, curtain group list
-                await self._async_mqtt_publish("P/0/center/q33", {})
+                await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q33", {})
                 await asyncio.sleep(3)
                 # publish payload to get device list
                 data = {
@@ -556,10 +610,10 @@ class Gateway:
                     "max": DEVICE_COUNT_MAX,
                     "devTypes": self.devTypes,
                 }
-                await self._async_mqtt_publish("P/0/center/q5", data, 1)
+                await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 1)
                 await asyncio.sleep(3)
                 # publish payload to get scene list
-                await self._async_mqtt_publish("P/0/center/q28", {})
+                await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q28", {})
                 
                 # await asyncio.sleep(1)
 
@@ -576,22 +630,57 @@ class Gateway:
                         "max": DEVICE_COUNT_MAX,
                         "sns": self.sns,
                     }
-                    await self._async_mqtt_publish("P/0/center/q5", data, 2)
+                    await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 2)
             except OSError as err:
                 self.init_state = False
                 _LOGGER.error("出了一些问题: %s", err)
 
-    async def async_mqtt_publish(self,topic: str, data: object):
-        return await self._async_mqtt_publish(topic, data, seq=4)
+    async def async_mqtt_publish(self, topic: str, data: object):
+        return await self._async_mqtt_publish(topic, data, seq = 4)
+
+    async def mqtt_subscribe_custom(self, subscribe_topic) -> None:
+        await self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
+            subscribe_topic,self._async_mqtt_subscribe_custom,0,"utf-8")
+        #await self.reconnect(self._entry)
+    
+    async def _async_mqtt_subscribe_custom(self,msg):
+            payload = msg.payload
+            topic = msg.topic
+            timestamp = msg.timestamp
+            #_LOGGER.warning(f"msg,{msg}")
+
+
+            if payload:
+             try:
+                payload = json.loads(payload)
+                #_LOGGER.warning(f"topic,{topic} payload,{payload}")
+
+                # store = Store(self.hass, 1, f'test/{topic}')
+                # await store.async_save(payload["data"])
+
+             except ValueError:
+                _LOGGER.warning("Unable to parse JSON: '%s'", payload)
+                return
+            else:
+             _LOGGER.warning("JSON None")
+             return
+            #payload["timestamp"] = timestamp.isoformat()
+            message = json.dumps(payload,ensure_ascii=False,indent=4)
+            
+            
+            
+            await self.hass.services.async_call( "persistent_notification", "create", 
+             {"title":topic,"message": message,"notification_id": topic}, blocking=True)
+  
 
     async def _async_mqtt_publish(self, topic: str, data: object, seq=2):
 
         query_device_payload = {
             "seq": seq,
-            "rspTo": MQTT_TOPIC_PREFIX,
+            "rspTo": f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}",
             "data": data
         }
-        _LOGGER.debug("topic %s data %s", topic, query_device_payload)
+        #_LOGGER.warning("topic %s data %s", topic, query_device_payload)
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
             topic,
             json.dumps(query_device_payload),

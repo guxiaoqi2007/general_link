@@ -97,6 +97,10 @@ class CustomLight(LightEntity):
 
         self.config_entry = config_entry
 
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
+
+        #_LOGGER.warning(f"light{config_entry.data}")
+
         self.update_state(config)
 
         """Add a device state change event listener, and execute the specified method when the device state changes. 
@@ -262,7 +266,7 @@ class CustomLight(LightEntity):
             message["data"]["rgb"] = rgb
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q20",
+            f"P/{self.mqttAddr}/center/q20",
             json.dumps(message),
             0,
             False

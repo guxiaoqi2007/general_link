@@ -19,3 +19,45 @@ custom_push_mqtt:
         json:
           multiline: false
           placeholder: "请输入 JSON 格式的数据"
+
+get_backupconfig:
+  fields:
+    # 备份配置名称
+    name:
+      required: true
+      example: "username"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入用户"
+
+    password:
+      required: true
+      example: "123456"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入密码"
+    url:
+      required: False
+      example: "xxx.xxx.xxx.com"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入url"
+
+    manufacturer:
+       required: False
+       example: "Xxxxx"
+       selector:
+         text:
+           multiline: false
+           placeholder: "请输入厂商"
+    
+    envKey:
+      required: true
+      example: "123456"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输envKey"

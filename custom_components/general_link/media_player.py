@@ -58,6 +58,7 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         self._volume = False
         self._repeat = RepeatMode.OFF
         self._shuffle = False
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -290,7 +291,7 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q56",
+            f"P/{self.mqttAddr}/center/q56",
             json.dumps(message),
             0,
             False

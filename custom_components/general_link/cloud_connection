@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "/config/custom_components/general_link/cloud_connection",
+  "data": {
+    "Netmoon": {
+      "name": "",
+      "broker": "mqtt.iot.9451.com.cn",
+      "port": 8883,
+      "username": "a0_netmoon",
+      "password": "khxcvwjk2423",
+      "certificate": "/config/custom_components/general_link/Netmoon-CA.crt",
+      "protocol": "3.1.1",
+      "mqttAddr": "",
+      "keepalive": 60
+    },
+    "Sufn": {
+      "name": "",
+      "broker": "mqtt.iot.shafengled.cn",
+      "port": 8883,
+      "username": "a0_sufn",
+      "password": "12344klsdf",
+      "certificate": "/config/custom_components/general_link/Sufn-CA.crt",
+      "protocol": "3.1.1",
+      "mqttAddr": "",
+      "keepalive": 60
+    }
+  }
+}

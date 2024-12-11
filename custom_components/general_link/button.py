@@ -45,6 +45,7 @@ class RebootButton(ButtonEntity,ABC):
         self.sn = config["sn"]
         self.hass = hass
         self.config_entry = config_entry
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         key = EVENT_ENTITY_STATE_UPDATE.format(self.unique_id)
         if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
@@ -89,7 +90,7 @@ class RebootButton(ButtonEntity,ABC):
         }
         #message["data"]["sns"] = self.sn
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q57",
+            f"P/{self.mqttAddr}/center/q57",
             json.dumps(message),
             0,
             False

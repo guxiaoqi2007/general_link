@@ -6,6 +6,8 @@ from collections import OrderedDict
 import re
 import voluptuous as vol
 
+from homeassistant.helpers.selector import selector
+from homeassistant.core import callback
 from homeassistant import config_entries, exceptions
 from homeassistant.components import zeroconf
 from homeassistant.data_entry_flow import FlowResult
@@ -16,14 +18,18 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_URL,
     CONF_ADDRESS,
+    CONF_PROTOCOL
 )
+from homeassistant.helpers.storage import Store
+from homeassistant.components.mqtt.const import CONF_CERTIFICATE
 from .mdns import MdnsScanner
 from .const import (
     DOMAIN, CONF_BROKER, CONF_LIGHT_DEVICE_TYPE, CONF_ENVKEY, CONF_PLACE
 )
 from .scan import scan_and_get_connection_dict
 from .util import format_connection
-from .aiohttp import HttpRequest
+from .http_get import HttpRequest
+
 
 connection_dict = {}
 temp_envkey = None
@@ -32,6 +38,7 @@ temp_envpassword = "gAAAAABmuFUSYdkfaAGSUz1fmcpkGal4SFeyrQpixXsM3qsQvhZQIJLadZmi
 light_device_type = None
 scan_flag = False
 reconfigure = False
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,21 +118,75 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 light_device_type = "group"
             if user_input["scanmode"] == "手动":
-                return await self.async_step_manual()
-            else:
+                return await self.async_step_envkey()
+            elif user_input["scanmode"] == "自动":
                 return await self.async_step_scan()
+            elif user_input["scanmode"] == "云端":
+                return await self.async_step_cloud()
 
         fields = OrderedDict()
         fields[vol.Required(CONF_LIGHT_DEVICE_TYPE, default="灯组")] = vol.In(
             ["单灯", "灯组"])
+        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动","云端"])
         fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
-
         return self.async_show_form(
             step_id="option",
             data_schema=vol.Schema(fields),
             errors=errors
         )
+    async def async_step_cloud(self, user_input=None):
+        """Select a gateway from the list of discovered gateways to connect to"""
+        global scan_flag
+        global connection_dict
+        global light_device_type
+        global reconfigure
+        errors = {}
 
+
+        if user_input is not None:
+            name = user_input["mqttAddr"]
+            mode = user_input["mode"]
+            store = Store(self.hass, 1, '/config/custom_components/general_link/cloud_connection')
+            cloud_connection = await store.async_load()
+            
+            
+            #await store.async_save(connection_dict)
+            
+            connection =  cloud_connection[mode]
+            connection["name"] = f"{name}_{mode}_cloud"
+            connection["mqttAddr"] = name
+        
+            if name is not None:
+                can_connect = self._try_mqtt_connect(connection)
+                if can_connect:
+                    connection[CONF_LIGHT_DEVICE_TYPE] = light_device_type
+                    scan_flag = False
+                    if reconfigure:
+                        reconfigure = False
+                        return self.async_update_reload_and_abort(
+                            self.reauth_entry,
+                            data=connection,
+                        )
+                    else:
+                        """Create an integration based on selected configuration information"""
+                        return self.async_create_entry(
+                            title=connection[CONF_NAME], data=connection
+                        )
+                else:
+                    errors["base"] = "cannot_connect"
+            else:
+                return self.async_abort(reason="select_error")
+
+        """Search the LAN's gateway list"""
+    
+
+        fields = OrderedDict()
+        fields[vol.Required("mqttAddr")] = str
+        fields[vol.Required("mode", default="Netmoon")] = vol.In(["Netmoon", "Sufn"])
+
+        return self.async_show_form(
+            step_id="cloud", data_schema=vol.Schema(fields), errors=errors
+        )
     async def async_step_scan(self, user_input=None):
         """Select a gateway from the list of discovered gateways to connect to"""
         global scan_flag
@@ -133,6 +194,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         global light_device_type
         global reconfigure
         errors = {}
+        
 
         if user_input is not None:
             name = user_input[CONF_NAME]
@@ -193,9 +255,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.hass.data.setdefault("http_request", hr)
 
             # _LOGGER.warning("hass data %s",hr)
-            await hr.start()
+            connection_dict = await hr.start()
 
-            connection_dict = await hr.get_envkey()
+           # connection_dict = await hr.get_envkey()
 
             if connection_dict is not None:
                 if "code" in connection_dict:
@@ -205,12 +267,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
 
                 return self.async_abort(reason="not_found_device")
-
+        else:
+            name = "manual"
+            password = "0"
+            url = "xxx.xxx.com"
+            manufacturer = "Xxxx"
+        
         fields = OrderedDict()
-        fields[vol.Required(CONF_URL, default="xxx.xxx.com")] = str
-        fields[vol.Required("manufacturer", default="Xxxx")] = str
-        fields[vol.Required(CONF_NAME, default="manual")] = str
-        fields[vol.Required(CONF_PASSWORD, default="0")] = str
+        fields[vol.Required(CONF_URL, default=url)] = str
+        fields[vol.Required("manufacturer", default=manufacturer)] = str
+        fields[vol.Required(CONF_NAME, default=name)] = str
+        fields[vol.Required(CONF_PASSWORD, default=password)] = str
 
         return self.async_show_form(
             step_id="envkey", data_schema=vol.Schema(fields), errors=errors
@@ -315,6 +382,52 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             connection[CONF_USERNAME],
             connection[CONF_PASSWORD],
         )
+    @staticmethod
+    @callback
+    def async_get_options_flow(entry: config_entries.ConfigEntry):
+        return OptionsFlowHandler(entry)
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    def __init__(self, config_entry: config_entries.ConfigEntry):
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "create_sync",
+                "modify_sync",
+                "destroy_sync",
+            ],
+        )
+
+    async def async_step_user(self, user_input=None):
+        options = self.config_entry.options
+        errors = {}
+        if user_input is not None:
+            return self.async_create_entry(title='', data=user_input)
+        
+        media_states = self.hass.states.async_all('media_player')
+        media_entities = []
+
+        for state in media_states:
+            friendly_name = state.attributes.get('friendly_name')
+            platform = state.attributes.get('platform')
+            entity_id = state.entity_id
+            value = f'{friendly_name}（{entity_id}）'
+
+            if platform != 'cloud_music' and state.state != 'unavailable':
+                media_entities.append({ 'label': value, 'value': entity_id })
+
+        DATA_SCHEMA = vol.Schema({
+            vol.Required('media_player', default=options.get('media_player')): selector({
+                "select": {
+                    "options": media_entities,
+                    "multiple": True
+                }
+            })            
+        })
+        return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA, errors=errors)
 
 
 def try_connection(hass, broker, port, username, password, protocol="3.1.1"):

@@ -1,6 +1,7 @@
 import logging
 import time
 import asyncio
+import json
 
 from homeassistant.const import __version__
 from homeassistant.components import network
@@ -12,12 +13,14 @@ from ipaddress import ip_network
 from .listener import sender_receiver
 from .Gateway import Gateway
 from .const import PLATFORMS, MQTT_CLIENT_INSTANCE, CONF_LIGHT_DEVICE_TYPE, DOMAIN, FLAG_IS_INITIALIZED, \
-    CACHE_ENTITY_STATE_UPDATE_KEY_DICT, CONF_BROKER, CONF_ENVKEY, CONF_PLACE
+    CACHE_ENTITY_STATE_UPDATE_KEY_DICT, CONF_BROKER, CONF_ENVKEY, CONF_PLACE,MQTT_TOPIC_PREFIX,TEMP_MQTT_TOPIC_PREFIX
 from .mdns import MdnsScanner
+from .http_get import HttpRequest
 
 _LOGGER = logging.getLogger(__name__)
 reconnect_flag = asyncio.Event()
 
+#temp_ll = None
 
 async def _async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """当配置项更新时的异步处理函数。
@@ -30,6 +33,8 @@ async def _async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -
     hass.async_create_task(
         hub.init(entry, False)
     )
+
+
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -49,6 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 初始化标记和实体状态更新键字典
     hass.data.setdefault(FLAG_IS_INITIALIZED, False)
     hass.data.setdefault(CACHE_ENTITY_STATE_UPDATE_KEY_DICT, {})
+    hass.data.setdefault(TEMP_MQTT_TOPIC_PREFIX, {})
 
     # 如果尚未初始化，则进行初始化操作
     if not hass.data[FLAG_IS_INITIALIZED]:
@@ -93,23 +99,63 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
     _LOGGER.warning(f"homeassistant.version ,{__version__}")
+    
 
     async def custom_push_mqtt(call):
 
         topic = call.data.get("topic", "P/0/center/q24")
-
+        data = call.data.get("data")
+        global temp_ll
+        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        
+        
+        if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
+           await hub.mqtt_subscribe_custom(subscribe_topic)
+           hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
+        _LOGGER.warning(f"topic,{hass.data[TEMP_MQTT_TOPIC_PREFIX]}")
         # if topic == "P/0/center/q24":
         #  data = call.data
         # else:
-        data = call.data.get("data")
 
         await hub.async_mqtt_publish(topic, data)
+
+
 
         # hass.states.set(f"{DOMAIN}.PUSH", payload)
 
         return True
 
     hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt)
+    
+
+    async def get_backupconfig(call):
+        name = call.data.get("name")
+        password = call.data.get("password")
+        url = call.data.get("url","api.iot.9451.com.cn")
+        manufacturer = call.data.get("manufacturer", "Netmoon")
+        envKey = call.data.get("envKey","123456")
+        hr= HttpRequest(hass, name, password, url, manufacturer)
+        response = await hr.get_envkey()
+
+        message = json.dumps(response,ensure_ascii=False,indent=4)
+        
+        await hass.services.async_call(
+
+        "persistent_notification", "create", {"title":"场所信息","message": message,"notification_id": 1}, blocking=True
+
+        )
+        responsebackup = await hr.get_backupfile(envKey)
+
+        message = json.dumps(responsebackup,ensure_ascii=False,indent=4)
+        await hass.services.async_call(
+
+        "persistent_notification", "create", {"title":"备份信息","message": message,"notification_id": 2}, blocking=True
+
+        )
+        return True
+    
+    hass.services.async_register(DOMAIN, "get_backupconfig", get_backupconfig)
+    
 
     hass.async_create_background_task(
 

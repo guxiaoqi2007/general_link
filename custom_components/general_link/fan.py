@@ -86,6 +86,8 @@ class CustomFan(FanEntity, ABC):
         #self.current_speed = 1
 
         self._attr_percentage = 100
+        
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -219,7 +221,7 @@ class CustomFan(FanEntity, ABC):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q74",
+            f"P/{self.mqttAddr}/center/q74",
             json.dumps(message),
             0,
             False

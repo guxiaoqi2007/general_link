@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.const import LIGHT_LUX
+from homeassistant.const import LIGHT_LUX,UnitOfElectricPotential,UnitOfElectricCurrent,UnitOfEnergy
 
 from .const import DOMAIN, EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CACHE_ENTITY_STATE_UPDATE_KEY_DICT, MANUFACTURER
 
@@ -26,6 +26,12 @@ async def async_setup_entry(
         try:
             if "a14" in config_payload:
                 async_add_entities([LightSensor(hass, config_payload, config_entry)])
+            if "a155" in config_payload:
+                async_add_entities([VoltageSensor(hass, config_payload, config_entry)])
+            if "a158" in config_payload:
+                async_add_entities([CurrentSensor(hass, config_payload, config_entry)])
+            if "a173" in config_payload:
+                async_add_entities([EnergySensor(hass, config_payload, config_entry)])
         except Exception :
             raise
 
@@ -84,4 +90,152 @@ class LightSensor(SensorEntity):
         """传感器事件报告更改HA中的传感器状态"""
         if "a14" in data:
             self._attr_native_value = data["a14"]
+
+class VoltageSensor(SensorEntity):
+    """用于处理光照传感器相关的业务逻辑的自定义实体类"""
+
+    should_poll = False
+    device_class = SensorDeviceClass.ILLUMINANCE
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]+"V"
+        self._attr_name = config["name"]+"_电压"
+        #self._attr_entity_id = config["unique_id"]+"L"
+        self.dname = config["name"]
+        self._device_class = SensorDeviceClass.VOLTAGE
+        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+        self._attr_native_value = config["a155"]
+        self.sn = config["sn"]
+        self.hass = hass
+        self.config_entry = config_entry
+        self.update_state(config)
+
+        key = EVENT_ENTITY_STATE_UPDATE.format(self.unique_id)
+        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            unsub = async_dispatcher_connect(
+                hass, key, self.async_discover
+            )
+            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
+            config_entry.async_on_unload(unsub)
+
+    @callback
+    def async_discover(self, data: dict) -> None:
+        try:
+            self.update_state(data)
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error(f"更新传感器状态时出错: {e}")
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """关于此实体/设备的信息"""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            "name": self.dname,
+            "manufacturer": MANUFACTURER,
+        }
+
+    def update_state(self, data):
+        """传感器事件报告更改HA中的传感器状态"""
+        if "a155" in data:
+            self._attr_native_value = data["a155"]
+
+
+class CurrentSensor(SensorEntity):
+    """用于处理光照传感器相关的业务逻辑的自定义实体类"""
+
+    should_poll = False
+    device_class = SensorDeviceClass.ILLUMINANCE
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]+"C"
+        self._attr_name = config["name"]+"_电流"
+        #self._attr_entity_id = config["unique_id"]+"L"
+        self.dname = config["name"]
+        self._device_class = SensorDeviceClass.CURRENT
+        self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+        self._attr_native_value = config["a158"]
+        self.sn = config["sn"]
+        self.hass = hass
+        self.config_entry = config_entry
+        self.update_state(config)
+
+        key = EVENT_ENTITY_STATE_UPDATE.format(self.unique_id)
+        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            unsub = async_dispatcher_connect(
+                hass, key, self.async_discover
+            )
+            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
+            config_entry.async_on_unload(unsub)
+
+    @callback
+    def async_discover(self, data: dict) -> None:
+        try:
+            self.update_state(data)
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error(f"更新传感器状态时出错: {e}")
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """关于此实体/设备的信息"""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            "name": self.dname,
+            "manufacturer": MANUFACTURER,
+        }
+
+    def update_state(self, data):
+        """传感器事件报告更改HA中的传感器状态"""
+        if "a158" in data:
+            self._attr_native_value = data["a158"]
+
+class EnergySensor(SensorEntity):
+    """用于处理光照传感器相关的业务逻辑的自定义实体类"""
+
+    should_poll = False
+    device_class = SensorDeviceClass.ILLUMINANCE
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]+"E"
+        self._attr_name = config["name"]+"_用电量"
+        #self._attr_entity_id = config["unique_id"]+"L"
+        self.dname = config["name"]
+        self._device_class = SensorDeviceClass.ENERGY
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        self._attr_native_value = config["a173"]
+        self.sn = config["sn"]
+        self.hass = hass
+        self.config_entry = config_entry
+        self.update_state(config)
+
+        key = EVENT_ENTITY_STATE_UPDATE.format(self.unique_id)
+        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            unsub = async_dispatcher_connect(
+                hass, key, self.async_discover
+            )
+            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
+            config_entry.async_on_unload(unsub)
+
+    @callback
+    def async_discover(self, data: dict) -> None:
+        try:
+            self.update_state(data)
+            self.async_write_ha_state()
+        except Exception as e:
+            _LOGGER.error(f"更新传感器状态时出错: {e}")
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """关于此实体/设备的信息"""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            "name": self.dname,
+            "manufacturer": MANUFACTURER,
+        }
+
+    def update_state(self, data):
+        """传感器事件报告更改HA中的传感器状态"""
+        if "a173" in data:
+            self._attr_native_value = data["a173"]
 

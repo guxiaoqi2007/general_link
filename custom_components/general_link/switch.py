@@ -29,6 +29,12 @@ async def async_setup_entry(
 
     async def async_discover(config_payload):
         try:
+            _LOGGER.warning(f"CustomSwitch-{config_payload}")
+            if "a41" in config_payload:
+                async_add_entities([CustomSwitchA41(hass, config_payload, config_entry)])
+            if "a121" in config_payload:
+                async_add_entities([CustomSwitchA121(hass, config_payload, config_entry)])
+                
             if "relaysNum" in config_payload:
                 relays = config_payload["relays"]
                 relaysNames = config_payload["relaysNames"]
@@ -79,6 +85,8 @@ class CustomSwitch(SwitchEntity, ABC):
         self.relay = config["relay"]
 
         self.config_entry = config_entry
+
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -148,7 +156,223 @@ class CustomSwitch(SwitchEntity, ABC):
         message["data"]["sn"] = self.sn
         message["data"]["state"] = int(on)
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q68",
+            f"P/{self.mqttAddr}/center/q68",
+            json.dumps(message),
+            0,
+            False
+        )
+
+
+class CustomSwitchA41(SwitchEntity, ABC):
+    """Custom entity class to handle business logic related to switchs"""
+
+    should_poll = False
+
+    device_class = COMPONENT
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]
+
+        self._attr_name = config["name"]
+
+        self.dname = config["name"]
+
+        self._state = True
+
+        self._is_on = True
+
+        self.sn = config["sn"]
+
+        self.hass = hass
+
+        #self.relay = config["relay"]
+
+        self.config_entry = config_entry
+
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
+
+        self.update_state(config)
+
+        """Add a device state change event listener, and execute the specified method when the device state changes. 
+        Note: It is necessary to determine whether an event listener has been added here to avoid repeated additions."""
+        key = EVENT_ENTITY_STATE_UPDATE.format(self.sn)
+        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            unsub = async_dispatcher_connect(
+                hass, key, self.async_discover
+            )
+            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
+            config_entry.async_on_unload(unsub)
+
+    @callback
+    def async_discover(self, data: dict) -> None:
+        try:
+            self.update_state(data)
+            self.async_write_ha_state()
+        except Exception:
+            raise
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Information about this entity/device."""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            # If desired, the name for the device could be different to the entity
+            "name": self.dname,
+            "manufacturer": MANUFACTURER,
+        }
+
+    @property
+    def is_on(self):
+        """Return true if switch is on."""
+        return self._state
+
+    def update_state(self, data):
+        """Switch event reporting changes the switch state in HA"""
+        if "a41" in data:
+            if data["a41"] == 0:
+                self._state = False
+            else:
+                self._state = True
+
+    async def async_turn_on(self, **kwargs):
+        """Turn on the switch"""
+        await self.exec_command(39,1)
+
+        self._state = True
+
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        """Turn off the switch"""
+        await self.exec_command(39,0)
+
+        self._state = False
+
+        self.async_write_ha_state()
+
+    async def exec_command(self, i: int, p):
+        """Execute MQTT commands"""
+        message = {
+            "seq": 1,
+            "data": {
+                "sn": self.sn,
+                "i": i,
+                "p":
+                    {
+                    "a41" : p
+                }
+            }
+        }
+
+        await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
+            f"P/{self.mqttAddr}/center/q74",
+            json.dumps(message),
+            0,
+            False
+        )
+class CustomSwitchA121(SwitchEntity, ABC):
+    """Custom entity class to handle business logic related to switchs"""
+
+    should_poll = False
+
+    device_class = COMPONENT
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]
+
+        self._attr_name = config["name"]
+
+        self.dname = config["name"]
+
+        self._state = True
+
+        self._is_on = True
+
+        self.sn = config["sn"]
+
+        self.hass = hass
+
+        #self.relay = config["relay"]
+
+        self.config_entry = config_entry
+
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
+
+        self.update_state(config)
+
+        """Add a device state change event listener, and execute the specified method when the device state changes. 
+        Note: It is necessary to determine whether an event listener has been added here to avoid repeated additions."""
+        key = EVENT_ENTITY_STATE_UPDATE.format(self.sn)
+        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            unsub = async_dispatcher_connect(
+                hass, key, self.async_discover
+            )
+            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
+            config_entry.async_on_unload(unsub)
+
+    @callback
+    def async_discover(self, data: dict) -> None:
+        try:
+            self.update_state(data)
+            self.async_write_ha_state()
+        except Exception:
+            raise
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Information about this entity/device."""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            # If desired, the name for the device could be different to the entity
+            "name": self.dname,
+            "manufacturer": MANUFACTURER,
+        }
+
+    @property
+    def is_on(self):
+        """Return true if switch is on."""
+        return self._state
+
+    def update_state(self, data):
+        """Switch event reporting changes the switch state in HA"""
+        if "a121" in data:
+            if data["a121"] == 0:
+                self._state = False
+            else:
+                self._state = True
+
+    async def async_turn_on(self, **kwargs):
+        """Turn on the switch"""
+        await self.exec_command(38,1)
+
+        self._state = True
+
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        """Turn off the switch"""
+        await self.exec_command(38,0)
+
+        self._state = False
+
+        self.async_write_ha_state()
+
+    async def exec_command(self, i: int, p):
+        """Execute MQTT commands"""
+        message = {
+            "seq": 1,
+            "data": {
+                "sn": self.sn,
+                "i": i,
+                "p":
+                    {
+                    "a121" : p
+                }
+            }
+        }
+
+        await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
+            f"P/{self.mqttAddr}/center/q74",
             json.dumps(message),
             0,
             False

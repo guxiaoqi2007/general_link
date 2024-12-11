@@ -35,7 +35,6 @@ async def async_setup_entry(
     which is used to create a sub-device"""
 
     async def async_discover(config_payload):
-        
         try:
             if config_payload["openWay"] <= 4:
                async_add_entities([CustomCover(hass, config_payload, config_entry)])
@@ -89,6 +88,8 @@ class CustomCover(CoverEntity):
         self.config_entry = config_entry
 
         self.moving = 0
+
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -198,7 +199,7 @@ class CustomCover(CoverEntity):
             message["data"]["travel"] = round(position / 100, 2)
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q21",
+            f"P/{self.mqttAddr}/center/q21",
             json.dumps(message),
             0,
             False
@@ -269,7 +270,7 @@ class CustomCoverA(CustomCover):
             message["data"]["angle"] = round(position / 100, 2)
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q21",
+            f"P/{self.mqttAddr} /center/q21",
             json.dumps(message),
             0,
             False

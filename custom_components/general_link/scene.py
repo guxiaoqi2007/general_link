@@ -62,6 +62,7 @@ class CustomScene(Scene):
         self.hass = hass
 
         self.config_entry = config_entry
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -87,7 +88,7 @@ class CustomScene(Scene):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q30",
+            "P/{self.mqttAddr}/center/q30",
             json.dumps(message),
             0,
             False

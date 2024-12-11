@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import ssl
 import time
 from functools import lru_cache
 from typing import Any, Iterable, Callable
@@ -22,6 +23,7 @@ from homeassistant.components.mqtt.client import TIMEOUT_ACK, SubscribePayloadTy
 from homeassistant.components.mqtt.models import  MessageCallbackType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.components.mqtt.const import CONF_CERTIFICATE
 from homeassistant.core import HomeAssistant, callback, HassJob
 from homeassistant.exceptions import HomeAssistantError
 from operator import attrgetter
@@ -80,6 +82,8 @@ class MqttClient:
         self.subscriptions: list[Subscription] = []
         self._pending_operations_condition = asyncio.Condition()
         self._client.username_pw_set(self._username, password=self._password)
+        if CONF_CERTIFICATE in conf:
+            self._client.tls_set(ca_certs=conf[CONF_CERTIFICATE],cert_reqs=ssl.CERT_NONE)
         self._paho_lock = asyncio.Lock()
 
     def init_client(self) -> None:
@@ -97,6 +101,8 @@ class MqttClient:
         self._username = self.conf[CONF_USERNAME]
         self._password = self.conf[CONF_PASSWORD]
         self._client.username_pw_set(self._username, password=self._password)
+        #if CONF_CERTIFICATE in self.conf:
+           # self._client.tls_set(ca_certs=self.conf[CONF_CERTIFICATE],cert_reqs=ssl.CERT_NONE)
         #result: int | None = None
         result = None
         try:
@@ -320,7 +326,7 @@ class MqttClient:
 
     @callback
     def _mqtt_handle_message(self, msg: MQTTMessage) -> None:
-        _LOGGER.debug(
+        _LOGGER.warning(
             "Received%s message on %s: %s",
             " retained" if msg.retain else "",
             msg.topic,

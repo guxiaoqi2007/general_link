@@ -11,6 +11,7 @@ from .const import DOMAIN, EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CAC
 _LOGGER = logging.getLogger(__name__)
 
 COMPONENT = "binary_sensor"
+INPUT_SCHEMA = ['a100','a101','a102','a103']
 
 async def async_setup_entry(
         hass: HomeAssistant,
@@ -22,7 +23,18 @@ async def async_setup_entry(
     async def async_discover(config_payload):
         try:
             if "a15" in config_payload:
-                async_add_entities([MotionSensor(hass, config_payload, config_entry)])
+                async_add_entities([MotionA15Sensor(hass, config_payload, config_entry)])
+            elif "a100" in config_payload:
+                unique_id = config_payload['unique_id']
+                name = config_payload['name']
+               
+                for i, inputname in enumerate(INPUT_SCHEMA,start=1):
+                   config_payload['unique_id'] = f"{unique_id}_{inputname}"
+                   config_payload['name'] = f"{name}_{i}"
+                   config_payload['inputname'] = inputname
+                   #_LOGGER.warning(f"A100传感器未实现{config_payload}")
+                   async_add_entities([MotionA100Sensor(hass, config_payload, config_entry)])
+
         except Exception :
             raise
 
@@ -37,12 +49,12 @@ class MotionSensor(BinarySensorEntity):
     """用于处理占用传感器相关的业务逻辑的自定义实体类"""
 
     should_poll = False
-    device_class = BinarySensorDeviceClass.MOTION
+    
     def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
-        self._attr_unique_id = config["unique_id"] + "M"
-        self._attr_name = config["name"] + "_存在"
-        self._device_class = BinarySensorDeviceClass.MOTION
-        self._attr_is_on = bool(config["a15"])
+        
+        #self._attr_name = config["name"] + "_存在"
+        #self._device_class = BinarySensorDeviceClass.MOTION
+        #self._attr_is_on = bool(config["a15"])
         self.dname = config["name"]
         self.sn = config["sn"]
         self.hass = hass
@@ -74,8 +86,37 @@ class MotionSensor(BinarySensorEntity):
             "manufacturer": MANUFACTURER,
         }
 
+
+class MotionA15Sensor(MotionSensor):
+    """用于处理占用传感器相关的业务逻辑的自定义实体类"""
+    device_class = BinarySensorDeviceClass.MOTION
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"] + "M"
+        self._attr_name = config["name"] + "_存在"
+        self._attr_is_on = bool(config["a15"])
+        super().__init__(hass, config, config_entry)
+
+
     def update_state(self, data: dict):
         """传感器事件报告更改HA中的传感器状态"""
         if "a15" in data:
             self._attr_is_on = bool(data["a15"])
+
+class MotionA100Sensor(MotionSensor):
+    """用于处理占用传感器相关的业务逻辑的自定义实体类"""
+    device_class = BinarySensorDeviceClass.OPENING
+
+    def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
+        self._attr_unique_id = config["unique_id"]
+        self._attr_name = config["name"] 
+        self._input = config["inputname"]
+        self._attr_is_on = bool(config[self._input])
+        super().__init__(hass, config, config_entry)
+        
+
+    def update_state(self, data: dict):
+        """传感器事件报告更改HA中的传感器状态"""
+        if self._input in data:
+            self._attr_is_on = bool(data[self._input])
 

@@ -82,6 +82,7 @@ def format_connection(discovery_info) -> dict:
     port = discovery_info.port
     username = None
     password = None
+    env_id = None
 
     for key, value in discovery_info.properties.items():
         if key == 'username':
@@ -90,6 +91,8 @@ def format_connection(discovery_info) -> dict:
             password = value
         elif key == 'host':
             host = value
+        elif  key   == 'env_id':
+            env_id = value
 
     connection = {
         CONF_NAME: name,
@@ -98,6 +101,7 @@ def format_connection(discovery_info) -> dict:
         CONF_USERNAME: username,
         CONF_PASSWORD: password,
         CONF_PROTOCOL: "3.1.1",
+        "mqttAddr" : env_id,
         "keepalive": 60
     }
 

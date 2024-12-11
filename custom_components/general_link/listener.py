@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def _decrypt_message(hass, encrypted_message):
-    store = Store(hass, 1, '../custom_components/general_link/secret_key')
+    store = Store(hass, 1, '/config/custom_components/general_link/secret_key')
     keyload = await store.async_load()
     if not keyload:
         key = Fernet.generate_key().decode()
@@ -103,7 +103,8 @@ async def sender_receiver(hass: HomeAssistant, userid: str, password: str, place
         "username": "",
         "password": password,
         "protocol": "3.1.1",
-        "keepalive": 60
+        "keepalive": 60,
+        "mqttAddr" : 0
     }
 
     try:
@@ -139,11 +140,13 @@ async def sender_receiver(hass: HomeAssistant, userid: str, password: str, place
         place = data_dict.get('place')
         host = data_dict.get('host')
         port = data_dict.get('port')
+        mqttAddr= data_dict.get('mqttAddr')
         username = data_dict.get('username')
         connection["name"] = f"IoT_Gateway-{place}"
         connection["broker"] = host
         connection["port"] = port
         connection["username"] = username
+        connection["mqttAddr"] = int(mqttAddr)
         connection[CONF_PLACE] = place
         # connection[MANUAL_FLAG] = True
         connection[CONF_ENVKEY] = userid

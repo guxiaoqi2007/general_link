@@ -35,7 +35,7 @@ async def async_setup_entry(
         try:
             if "a110" in config_payload:
                 a110 = int(config_payload["a110"])
-                if a110 == 2:
+                if a110 == 2 or a110 == 1:
                  # config_tmp = config_payload
                   #config_tmp["name"] = config_payload["name"] + "_水机"
                   async_add_entities([CustomClimateW(hass, config_payload, config_entry)])
@@ -108,6 +108,8 @@ class CustomClimate(ClimateEntity, ABC):
         self.hass = hass
 
         self.config_entry = config_entry
+
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -258,7 +260,7 @@ class CustomClimate(ClimateEntity, ABC):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q74",
+            f"P/{self.mqttAddr}/center/q74",
             json.dumps(message),
             0,
             False
@@ -315,6 +317,7 @@ class CustomClimateH(ClimateEntity, ABC):
         self.config_entry = config_entry
 
         self.a109 = config["a109"]
+        self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
 
@@ -422,7 +425,7 @@ class CustomClimateH(ClimateEntity, ABC):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/0/center/q74",
+            f"P/{self.mqttAddr}/center/q74",
             json.dumps(message),
             0,
             False
@@ -579,7 +582,7 @@ class CustomClimateW(CustomClimate):
            }
 
          await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-             "P/0/center/q74",
+             f"P/{self.mqttAddr}/center/q74",
              json.dumps(message),
              0,
              False
