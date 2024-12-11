@@ -44,5 +44,17 @@
                 "description": "请填入网关的场所标识和场所凭证和场所密码,使用单播填入网关地址。"
             }
         }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "\u64cd\u4f5c",
+                "menu_options": {
+                    "create_sync": "\u540c\u6b65\u5b9e\u4f53",
+                    "modify_sync": "\u7f16\u8f91\u540c\u6b65",
+                    "destroy_sync": "\u5220\u9664\u540c\u6b65"
+                }
+            }
+        }
     }
 }
