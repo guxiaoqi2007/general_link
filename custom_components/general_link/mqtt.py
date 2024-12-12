@@ -326,7 +326,7 @@ class MqttClient:
 
     @callback
     def _mqtt_handle_message(self, msg: MQTTMessage) -> None:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Received%s message on %s: %s",
             " retained" if msg.retain else "",
             msg.topic,
