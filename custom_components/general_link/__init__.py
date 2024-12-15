@@ -135,6 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         manufacturer = call.data.get("manufacturer", "Netmoon")
         envKey = call.data.get("envKey","123456")
         hr= HttpRequest(hass, name, password, url, manufacturer)
+        await hr.start()
         response = await hr.get_envkey()
 
         message = json.dumps(response,ensure_ascii=False,indent=4)

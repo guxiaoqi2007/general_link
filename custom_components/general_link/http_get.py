@@ -80,7 +80,7 @@ class HttpRequest:
 
     async def get_envkey(self):
         dict_data_by_envKey = {}
-        # await self._server_login()
+        #await self._server_login()
         # response_env  = None
 
         if self.response_data["code"] == 200:
@@ -97,3 +97,23 @@ class HttpRequest:
                 return None
         else:
             return self.response_data
+    async def get_backupfile(self, envKey):
+        # await self._server_login()
+        # response_env  = None
+        if self.response_data is None:
+            await self._server_login()
+
+        _params = self.params.copy()
+        _params["envKey"] = envKey
+        _params["orderDesc"] = "true"
+
+        if self.response_data["code"] == 200:
+         await self._send_http_request(f"https://{self.url}/device-file/getBackupFileList", "GET",
+                                         params=_params,
+                                         headers=self.headers
+                                         )
+         if self.response_data is not None:
+                return self.response_data
+         else:
+                _LOGGER.error("Failed to get a successful response.")
+                return None
