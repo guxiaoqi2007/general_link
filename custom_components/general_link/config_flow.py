@@ -127,8 +127,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         fields = OrderedDict()
         fields[vol.Required(CONF_LIGHT_DEVICE_TYPE, default="灯组")] = vol.In(
             ["单灯", "灯组"])
-        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动","云端"])
-        fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
+        fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动" ,"云端"])
+        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
         return self.async_show_form(
             step_id="option",
             data_schema=vol.Schema(fields),
@@ -304,8 +304,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if connection_dict is not None:
             for connection_name in list(connection_dict.keys()):
-                connection_name_list.append(f"场所ID:{connection_name}  |  场所名称:{
-                                            connection_dict[connection_name]['envName']}")
+                connection_name_list.append(f"场所ID:{connection_name}  |  场所名称:{connection_dict[connection_name]['envName']}")
 
         # _LOGGER.warning("gateway list %s", connection_dict)
 
