@@ -88,7 +88,7 @@ class CustomScene(Scene):
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
-            "P/{self.mqttAddr}/center/q30",
+            f"P/{self.mqttAddr}/center/q30",
             json.dumps(message),
             0,
             False
