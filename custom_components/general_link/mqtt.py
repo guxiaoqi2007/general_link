@@ -341,6 +341,7 @@ class MqttClient:
             payload: SubscribePayloadType = msg.payload
             if subscription.encoding is not None:
                 try:
+                    msg.payload = msg.payload.rstrip(b'\x00')
                     payload = msg.payload.decode(subscription.encoding)
                 except (AttributeError, UnicodeDecodeError):
                     _LOGGER.warning(
