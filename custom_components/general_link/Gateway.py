@@ -500,6 +500,8 @@ class Gateway:
             await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 1)
             # await self._async_mqtt_publish("P/0/center/q51", data, 1)
         else:
+            #休眠13s
+            await asyncio.sleep(13)
             await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 2)
            # await self._async_mqtt_publish("P/0/center/q51", data, 2)
 
