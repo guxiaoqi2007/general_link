@@ -237,7 +237,7 @@ async def monitor_connection(hass, hub, entry, reconnect_flag):
                     await _async_config_entry_updated(hass, entry)
 
             # 每300秒同步一次群组状态
-            elif current_time - last_sync_time >= 300:
+            elif current_time - last_sync_time >= 120:
                 _LOGGER.debug(f"current_time{current_time}last_sync_time{last_sync_time}")
                 last_sync_time = current_time
 
