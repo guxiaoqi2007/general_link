@@ -53,6 +53,7 @@ class LightSensor(SensorEntity):
         self._attr_name = config["name"]+"_光照"
         #self._attr_entity_id = config["unique_id"]+"L"
         self.dname = config["name"]
+        self._model = config["model"]
         self._device_class = SensorDeviceClass.ILLUMINANCE
         self._attr_native_unit_of_measurement = LIGHT_LUX
         self._attr_native_value = config["a14"]
@@ -82,6 +83,8 @@ class LightSensor(SensorEntity):
         """关于此实体/设备的信息"""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "model": self._model,
+            "serial_number": self.sn,
             "name": self.dname,
             "manufacturer": MANUFACTURER,
         }
@@ -102,6 +105,7 @@ class VoltageSensor(SensorEntity):
         self._attr_name = config["name"]+"_电压"
         #self._attr_entity_id = config["unique_id"]+"L"
         self.dname = config["name"]
+        self._model = config["model"]
         self._device_class = SensorDeviceClass.VOLTAGE
         self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
         self._attr_native_value = config["a155"]
@@ -131,6 +135,8 @@ class VoltageSensor(SensorEntity):
         """关于此实体/设备的信息"""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "model": self._model,
+            "serial_number": self.sn,
             "name": self.dname,
             "manufacturer": MANUFACTURER,
         }
@@ -152,6 +158,7 @@ class CurrentSensor(SensorEntity):
         self._attr_name = config["name"]+"_电流"
         #self._attr_entity_id = config["unique_id"]+"L"
         self.dname = config["name"]
+        self._model = config["model"]
         self._device_class = SensorDeviceClass.CURRENT
         self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
         self._attr_native_value = config["a158"]
@@ -181,6 +188,8 @@ class CurrentSensor(SensorEntity):
         """关于此实体/设备的信息"""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "model": self._model,
+            "serial_number": self.sn,
             "name": self.dname,
             "manufacturer": MANUFACTURER,
         }
@@ -204,6 +213,7 @@ class EnergySensor(SensorEntity):
         self._device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_native_value = config["a173"]
+        self._model = config["model"]
         self.sn = config["sn"]
         self.hass = hass
         self.config_entry = config_entry
@@ -230,6 +240,8 @@ class EnergySensor(SensorEntity):
         """关于此实体/设备的信息"""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "model": self._model,
+            "serial_number": self.sn,
             "name": self.dname,
             "manufacturer": MANUFACTURER,
         }

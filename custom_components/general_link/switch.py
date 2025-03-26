@@ -29,7 +29,7 @@ async def async_setup_entry(
 
     async def async_discover(config_payload):
         try:
-            
+            _LOGGER.warning(f"CustomSwitch-{config_payload}")
             if "a41" in config_payload:
                 async_add_entities([CustomSwitchA41(hass, config_payload, config_entry)])
             if "a121" in config_payload:
@@ -80,6 +80,8 @@ class CustomSwitch(SwitchEntity, ABC):
 
         self.sn = config["sn"]
 
+        self._model = config["model"]
+
         self.hass = hass
 
         self.relay = config["relay"]
@@ -113,6 +115,8 @@ class CustomSwitch(SwitchEntity, ABC):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
             # If desired, the name for the device could be different to the entity
             "name": self.dname,
             "manufacturer": MANUFACTURER,
@@ -150,6 +154,7 @@ class CustomSwitch(SwitchEntity, ABC):
     async def exec_command(self, on=None):
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {}
         }
         message["data"]["relay"] = self.relay
@@ -182,6 +187,8 @@ class CustomSwitchA41(SwitchEntity, ABC):
         self._is_on = True
 
         self.sn = config["sn"]
+
+        self._model = config["model"]
 
         self.hass = hass
 
@@ -216,6 +223,8 @@ class CustomSwitchA41(SwitchEntity, ABC):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
             # If desired, the name for the device could be different to the entity
             "name": self.dname,
             "manufacturer": MANUFACTURER,
@@ -254,6 +263,7 @@ class CustomSwitchA41(SwitchEntity, ABC):
         """Execute MQTT commands"""
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "i": i,
@@ -323,6 +333,7 @@ class CustomSwitchA121(SwitchEntity, ABC):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
             # If desired, the name for the device could be different to the entity
             "name": self.dname,
             "manufacturer": MANUFACTURER,
@@ -361,6 +372,7 @@ class CustomSwitchA121(SwitchEntity, ABC):
         """Execute MQTT commands"""
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "i": i,

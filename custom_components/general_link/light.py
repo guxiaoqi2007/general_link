@@ -72,6 +72,8 @@ class CustomLight(LightEntity):
 
         self.on_off = False
 
+        
+
         self.is_group = config["is_group"]
 
         self._attr_color_mode = ColorMode.COLOR_TEMP
@@ -88,6 +90,7 @@ class CustomLight(LightEntity):
             self._attr_supported_color_modes.add(ColorMode.RGB)
             self._attr_color_mode = ColorMode.RGB
         else:
+            self._model = config["model"]
             self.sn = config["sn"]
             if ColorMode.RGB in config:
                 self._attr_supported_color_modes.add(ColorMode.RGB)
@@ -124,12 +127,23 @@ class CustomLight(LightEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Information about this entity/device."""
-        return {
+        if self.is_group:
+         return {
             "identifiers": {(DOMAIN, self.unique_id)},
+            #"serial_number": self.sn,
             # If desired, the name for the device could be different to the entity
             "name": self.name,
             "manufacturer": MANUFACTURER,
-        }
+         }
+        else:
+            return {
+                "identifiers": {(DOMAIN, self.unique_id)},
+                "serial_number": self.sn,
+                "model": self._model,
+                # If desired, the name for the device could be different to the entity
+                "name": self.name,
+                "manufacturer": MANUFACTURER,
+            }
 
     @property
     def is_on(self) -> bool | None:
@@ -244,6 +258,7 @@ class CustomLight(LightEntity):
     async def exec_command(self, on=None, level=None, kelvin=None, rgb=None):
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {}
         }
 

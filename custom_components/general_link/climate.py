@@ -136,6 +136,7 @@ class CustomClimate(ClimateEntity, ABC):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
             # If desired, the name for the device could be different to the entity
             "name": self._attr_name,
             "manufacturer": MANUFACTURER,
@@ -252,6 +253,7 @@ class CustomClimate(ClimateEntity, ABC):
         """Execute MQTT commands"""
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "i": i,
@@ -371,7 +373,7 @@ class CustomClimateH(ClimateEntity, ABC):
 
         if "a19" in data:
             curr_temp = float(data["a19"])
-            self._attr_current_temperature = curr_temp
+            self._attr_current_temperature = curr_temp 
         
         if "a20" in data:
             curr_hum = float(data["a20"])*100
@@ -414,6 +416,7 @@ class CustomClimateH(ClimateEntity, ABC):
             m = "a114"
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "i": i,
@@ -477,7 +480,7 @@ class CustomClimateW(CustomClimate):
         
         if "a20" in data:
             curr_hum = float(data["a20"])*100
-            self._attr_current_humidity = curr_hum
+          #  self._attr_current_humidity = curr_hum
 
         if "a67" in data:
             fan_level = int(data["a67"])
@@ -561,6 +564,7 @@ class CustomClimateW(CustomClimate):
          """Execute MQTT commands"""
          message = {
              "seq": 1,
+             "rspTo": "A/hass",
              "data": {
                  "sn": self.sn,
                  "i": i,

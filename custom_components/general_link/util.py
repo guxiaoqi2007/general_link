@@ -102,7 +102,8 @@ def format_connection(discovery_info) -> dict:
         CONF_PASSWORD: password,
         CONF_PROTOCOL: "3.1.1",
         "mqttAddr" : env_id,
-        "keepalive": 60
+        "keepalive": 60,
+        "local": 1
     }
 
     return connection

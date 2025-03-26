@@ -57,6 +57,7 @@ class MotionSensor(BinarySensorEntity):
         #self._attr_is_on = bool(config["a15"])
         self.dname = config["name"]
         self.sn = config["sn"]
+        self._model = config["model"]
         self.hass = hass
         self.config_entry = config_entry
         self.update_state(config)
@@ -82,6 +83,8 @@ class MotionSensor(BinarySensorEntity):
         """关于此实体/设备的信息"""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
             "name": self.dname,
             "manufacturer": MANUFACTURER,
         }

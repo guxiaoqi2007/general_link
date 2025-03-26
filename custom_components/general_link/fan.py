@@ -52,7 +52,7 @@ class CustomFan(FanEntity, ABC):
 
     device_class = COMPONENT
 
-    supported_features =  FanEntityFeature.PRESET_MODE | FanEntityFeature.SET_SPEED
+    supported_features =  FanEntityFeature.PRESET_MODE | FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
 
     _attr_preset_modes = ["自动", "关闭自动"]
 
@@ -74,6 +74,8 @@ class CustomFan(FanEntity, ABC):
         self._is_on = True
 
         self.sn = config["sn"]
+
+        self._model = config["model"]
 
         self.hass = hass
 
@@ -116,6 +118,8 @@ class CustomFan(FanEntity, ABC):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
             # If desired, the name for the device could be different to the entity
             "name": self.dname,
             "manufacturer": MANUFACTURER,
@@ -210,6 +214,7 @@ class CustomFan(FanEntity, ABC):
             m = "a116"
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "i": i,

@@ -326,7 +326,7 @@ class MqttClient:
 
     @callback
     def _mqtt_handle_message(self, msg: MQTTMessage) -> None:
-        _LOGGER.debug(
+        _LOGGER.warning(
             "Received%s message on %s: %s",
             " retained" if msg.retain else "",
             msg.topic,
@@ -341,7 +341,9 @@ class MqttClient:
             payload: SubscribePayloadType = msg.payload
             if subscription.encoding is not None:
                 try:
+                    #gu
                     msg.payload = msg.payload.rstrip(b'\x00')
+
                     payload = msg.payload.decode(subscription.encoding)
                 except (AttributeError, UnicodeDecodeError):
                     _LOGGER.warning(

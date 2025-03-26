@@ -127,8 +127,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         fields = OrderedDict()
         fields[vol.Required(CONF_LIGHT_DEVICE_TYPE, default="灯组")] = vol.In(
             ["单灯", "灯组"])
-        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动" ,"云端"])
-        fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
+        fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动" ,"云端"])
+        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
         return self.async_show_form(
             step_id="option",
             data_schema=vol.Schema(fields),
@@ -203,6 +203,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 can_connect = self._try_mqtt_connect(connection)
                 if can_connect:
                     connection[CONF_LIGHT_DEVICE_TYPE] = light_device_type
+                    connection["local"] = 1
                     scan_flag = False
                     if reconfigure:
                         reconfigure = False
@@ -341,6 +342,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 can_connect = self._try_mqtt_connect(connection)
                 if can_connect:
                     connection[CONF_LIGHT_DEVICE_TYPE] = light_device_type
+                    connection["local"] = 1
                     scan_flag = False
                     """Create an integration based on selected configuration information"""
                     if reconfigure:
@@ -394,7 +396,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
-                "create_sync",
+                "user",
                 "modify_sync",
                 "destroy_sync",
             ],

@@ -105,6 +105,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         topic = call.data.get("topic", "P/0/center/q24")
         data = call.data.get("data")
+        sns = call.data.get("sns")
+        sns1 = call.data.get("sns1")
+        global temp_ll
+        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        
+        
+        if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
+           await hub.mqtt_subscribe_custom(subscribe_topic)
+           hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
+        _LOGGER.warning(f"sns{sns}")
+        _LOGGER.warning(f"topic,{hass.data[TEMP_MQTT_TOPIC_PREFIX]}")
+        # if topic == "P/0/center/q24":
+        #  data = call.data
+        # else:
+        
+        await hub.async_mqtt_publish(topic, data)
+        if sns is not None:
+            for sn in sns:
+             #休眠1s
+             await asyncio.sleep(2)
+             data["sn"] = sn
+             await hub.async_mqtt_publish(topic, data)
+        if sns1 is not None:
+            for sn in sns1:
+             #休眠1s
+             await asyncio.sleep(2)
+             data["sns"] = [sn]
+             await hub.async_mqtt_publish(topic, data)
+
+
+
+        # hass.states.set(f"{DOMAIN}.PUSH", payload)
+
+        return True
+
+    hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt)
+
+    async def del_ILight2_S1(call):
+
+        topic = call.data.get("topic", "P/0/center/q24")
+        data = call.data.get("data")
         global temp_ll
         subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
         
@@ -125,7 +166,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         return True
 
-    hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt)
+    hass.services.async_register(DOMAIN, "del_ILight2-S1", del_ILight2_S1)
+
+
     
 
     async def get_backupconfig(call):
@@ -209,7 +252,7 @@ async def monitor_connection(hass, hub, entry, reconnect_flag):
                 else:
                     connection = await scanner.scan_single(entry.data[CONF_NAME], 2)
 
-                _LOGGER.debug("mqtt 连接不上了，需要重新扫描一下，得到连接 %s", connection)
+                _LOGGER.warning("mqtt 连接不上了，需要重新扫描一下，得到连接 %s", connection)
                 _LOGGER.warning("mqtt 连接不上了，重新扫描一下")
 
                 
@@ -237,7 +280,7 @@ async def monitor_connection(hass, hub, entry, reconnect_flag):
                     await _async_config_entry_updated(hass, entry)
 
             # 每300秒同步一次群组状态
-            elif current_time - last_sync_time >= 120:
+            elif current_time - last_sync_time >= 60:
                 _LOGGER.debug(f"current_time{current_time}last_sync_time{last_sync_time}")
                 last_sync_time = current_time
 

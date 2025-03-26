@@ -69,6 +69,7 @@ class CustomScene(Scene):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.room_name)},
+            #"serial_number": self.id,
             # If desired, the name for the device could be different to the entity
             "name": self.room_name,
             "manufacturer": MANUFACTURER,
@@ -82,6 +83,7 @@ class CustomScene(Scene):
     async def exec_command(self):
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "id": self.id
             }

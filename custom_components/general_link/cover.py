@@ -75,6 +75,8 @@ class CustomCover(CoverEntity):
 
         self.sn = config["sn"]
 
+        self._model = config["model"]
+
         self._attr_name = config["name"]
 
         self._attr_device_class = CoverDeviceClass.CURTAIN
@@ -116,6 +118,8 @@ class CustomCover(CoverEntity):
         """Information about this entity/device."""
         return {
             "identifiers": {(DOMAIN, self.unique_id)},
+            "serial_number": self.sn,
+            "model": self._model,
             # If desired, the name for the device could be different to the entity
             "name": self.name,
             "manufacturer": MANUFACTURER,
@@ -189,6 +193,7 @@ class CustomCover(CoverEntity):
         """Execute MQTT commands"""
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "action": action
@@ -258,6 +263,7 @@ class CustomCoverA(CustomCover):
         """Execute MQTT commands"""
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sn": self.sn,
                 "action": action

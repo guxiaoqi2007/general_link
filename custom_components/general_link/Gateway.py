@@ -24,18 +24,22 @@ INPUT_SCHEMA = ['a100','a101','a102','a103']
 
 class Gateway:
     """Class for gateway and managing MQTT connections within the gateway"""
+    
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Init dummy hub."""
         self.hass = hass
         self._entry = entry
         self._last_init_time = None
+        self.tmp_a19 = None
         
         self._id = entry.data[CONF_NAME]
         
         if "mqttAddr" in entry.data:
             self.mqttAddr = entry.data["mqttAddr"]
             self.mqttAddr1 = entry.data["mqttAddr"]
+            if "local" in entry.data :
+                self.mqttAddr1 = '+'
             #_LOGGER.warning(f"mqttAddr:{self.mqttAddr}")
         else :
             self.mqttAddr = 0
@@ -103,6 +107,7 @@ class Gateway:
                 """Light"""
                 device["is_group"] = False
                 await self._add_entity("light", device)
+                await self._add_entity("button", device)
             elif device_type == 11:
                 """Climate"""
                 await self._add_entity("climate", device)
@@ -154,17 +159,20 @@ class Gateway:
 
     async def _async_mqtt_subscribe(self, msg):
         """Process received MQTT messages"""
-
+        #msg = msg.strip()
         payload = msg.payload
         topic = msg.topic
+        #_LOGGER.warning(f"topic:{topic} payload:{payload}")
+
 
         if payload:
             try:
                 payload = json.loads(payload)
-                #_LOGGER.warning(f"topic:{topic} payload:{payload}")
+                
 
                 # store = Store(self.hass, 1, f'test/{topic}')
                 # await store.async_save(payload["data"])
+                
 
             except ValueError:
                 _LOGGER.warning("Unable to parse JSON: '%s'", payload)
@@ -175,11 +183,19 @@ class Gateway:
 
         if topic.endswith("p5"):
             seq = payload["seq"]
+            
             start = payload["data"]["start"]
             count = payload["data"]["count"]
             total = payload["data"]["total"]
-
+            sns_tmp = []
             #_LOGGER.warning(f"q5 data:{payload}")
+            model = payload["data"]["list"]
+            #for data_tmp in model:
+               # if data_tmp["model"] == "ILight2-S1":
+                 #   sns_tmp.append(data_tmp['sn'])
+            #if sns_tmp:
+            # store = Store(self.hass, 1, f'test/model')
+           #  await store.async_save(sns_tmp)
 
             """Device List data"""
             device_list = payload["data"]["list"]
@@ -260,16 +276,23 @@ class Gateway:
                 }
                 await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 3)
 
-            _LOGGER.debug(f"event/3 data:{payload}")
+            _LOGGER.warning(f"event/3 data:{payload}")
 
             if flag:
                 await self.sync_group_status(False)
         elif topic.endswith("event/4"):
             _LOGGER.debug(f"event/4 data:{payload}")
 
+        elif topic.endswith("report/q5") or topic.endswith("report/q7"):
+            _LOGGER.warning(f"report/q5:{payload}")
+            #payload["timestamp"] = timestamp.isoformat()
+            message = json.dumps(payload,ensure_ascii=False,indent=4)
+            await self.hass.services.async_call( "persistent_notification", "create", {"title":topic,"message": message,"notification_id": topic}, blocking=True)
+            
+
         elif topic.endswith("event/5"):
             group_list = payload["data"]
-            _LOGGER.debug(f"event/5 data:{payload}")
+            _LOGGER.warning(f"event/5 data:{payload}")
             for group in group_list:
                 if 'a7' in group and 'a8' in group and 'a9' in group:
                     device_type = group['a7']
@@ -368,7 +391,14 @@ class Gateway:
                 )
         # 恒温多实体触发
         elif "devType" in data :
+            if data["sn"] == "A4C138A1E1BAE09E":
+                self.tmp_a19 = data["a19"]
             if data["devType"] == 9 :
+                if self.tmp_a19 is not None:
+                    data["a19"] = self.tmp_a19 
+                else :
+                    data["a19"] = int(data["a19"]) - 9
+                #data.pop('a19',None)
                 async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]), data
@@ -402,7 +432,7 @@ class Gateway:
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]), data
                 )
-                
+
                 async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]+"V"), data
@@ -496,12 +526,15 @@ class Gateway:
                 }
             })
         """
+        _LOGGER.debug("sync_group_status")
+        
+        
         if is_init:
             await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 1)
             # await self._async_mqtt_publish("P/0/center/q51", data, 1)
         else:
-            #休眠13s
-            await asyncio.sleep(13)
+            #延迟15s 刷新
+            await asyncio.sleep(15)
             await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 2)
            # await self._async_mqtt_publish("P/0/center/q51", data, 2)
 
@@ -530,8 +563,13 @@ class Gateway:
             f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p82",
             # Subscribe to device property change events
             f"p/{self.mqttAddr1}/event/3",
+            #gu
+            #"p/+/event/3",
             f"p/{self.mqttAddr1}/event/4",
             f"p/{self.mqttAddr1}/event/5",
+            f"p/{self.mqttAddr}/report/q5",
+            f"p/{self.mqttAddr}/report/q7",
+
         ]
 
        # for subscribe_topic in discovery_topics:
@@ -649,12 +687,22 @@ class Gateway:
             payload = msg.payload
             topic = msg.topic
             timestamp = msg.timestamp
+            
             #_LOGGER.warning(f"msg,{msg}")
 
 
             if payload:
              try:
+                #store = Store(self.hass, 1, f'test/model')
+                #sns_tmp=store.async_load
                 payload = json.loads(payload)
+               # model = payload["data"]["list"]
+                #for data_tmp in model:
+                  
+                 # if data_tmp["model"] == "ILight2-S1":
+                 #    sns_tmp.append(data_tmp['sn'])
+                #if sns_tmp:
+                # await store.async_save(sns_tmp)
                 #_LOGGER.warning(f"topic,{topic} payload,{payload}")
 
                 # store = Store(self.hass, 1, f'test/{topic}')
@@ -668,9 +716,6 @@ class Gateway:
              return
             #payload["timestamp"] = timestamp.isoformat()
             message = json.dumps(payload,ensure_ascii=False,indent=4)
-            
-            
-            
             await self.hass.services.async_call( "persistent_notification", "create", 
              {"title":topic,"message": message,"notification_id": topic}, blocking=True)
   

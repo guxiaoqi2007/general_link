@@ -43,6 +43,7 @@ class RebootButton(ButtonEntity,ABC):
         self._attr_device_class = "custom_button"
         self.dname = config["name"]
         self.sn = config["sn"]
+        self._model = config["model"]
         self.hass = hass
         self.config_entry = config_entry
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
@@ -67,7 +68,9 @@ class RebootButton(ButtonEntity,ABC):
     def device_info(self) -> DeviceInfo:
         """关于此实体/设备的信息"""
         return {
-            "identifiers": {(DOMAIN, R_identifiers)},
+            "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
             "name": "重启设备",
             "manufacturer": MANUFACTURER,
         }
@@ -84,6 +87,7 @@ class RebootButton(ButtonEntity,ABC):
     async def exec_command(self):
         message = {
             "seq": 1,
+            "rspTo": "A/hass",
             "data": {
                 "sns": [self.sn]
             }
