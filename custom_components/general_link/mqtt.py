@@ -68,7 +68,7 @@ class MqttClient:
             config_entry: ConfigEntry,
             conf: ConfigType,
     ) -> None:
-        self._client = client.Client(f'python-mqtt-{random.randint(0, 1000)}')
+        self._client = client.Client(client_id=f'python-mqtt-{random.randint(0, 1000)}')
         #self._client = client.Client(f'{random.randint(10000, 20000)}')
         self.hass = hass
         self.config_entry = config_entry
