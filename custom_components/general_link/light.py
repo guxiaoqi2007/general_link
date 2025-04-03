@@ -259,6 +259,9 @@ class CustomLight(LightEntity):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {}
         }
 

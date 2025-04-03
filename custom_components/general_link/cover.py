@@ -194,6 +194,9 @@ class CustomCover(CoverEntity):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sn": self.sn,
                 "action": action
@@ -264,6 +267,9 @@ class CustomCoverA(CustomCover):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sn": self.sn,
                 "action": action

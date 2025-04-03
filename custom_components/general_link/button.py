@@ -41,7 +41,7 @@ class RebootButton(ButtonEntity,ABC):
         self._attr_unique_id = config["unique_id"] + "Reboot"
         self._attr_name = config["name"] + "-重启"
         self._attr_device_class = "custom_button"
-        self.dname = config["name"]
+        self._dname = config["name"]
         self.sn = config["sn"]
         self._model = config["model"]
         self.hass = hass
@@ -88,6 +88,9 @@ class RebootButton(ButtonEntity,ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sns": [self.sn]
             }

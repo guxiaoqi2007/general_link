@@ -155,6 +155,9 @@ class CustomSwitch(SwitchEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {}
         }
         message["data"]["relay"] = self.relay
@@ -264,6 +267,9 @@ class CustomSwitchA41(SwitchEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sn": self.sn,
                 "i": i,
@@ -373,6 +379,9 @@ class CustomSwitchA121(SwitchEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sn": self.sn,
                 "i": i,

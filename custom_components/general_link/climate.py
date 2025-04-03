@@ -99,7 +99,7 @@ class CustomClimate(ClimateEntity, ABC):
 
         self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.FAN_MODE
 
-        self.sn = config["sn"]
+        self._sn = config["sn"]
 
         self._attr_name = config["name"]
         
@@ -135,8 +135,8 @@ class CustomClimate(ClimateEntity, ABC):
     def device_info(self) -> DeviceInfo:
         """Information about this entity/device."""
         return {
-            "identifiers": {(DOMAIN, self.sn)},
-            "serial_number": self.sn,
+            "identifiers": {(DOMAIN, self._sn)},
+            "serial_number": self._sn,
             # If desired, the name for the device could be different to the entity
             "name": self._attr_name,
             "manufacturer": MANUFACTURER,
@@ -254,8 +254,11 @@ class CustomClimate(ClimateEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
-                "sn": self.sn,
+                "sn": self._sn,
                 "i": i,
                 "v": v
             }
@@ -306,11 +309,11 @@ class CustomClimateH(ClimateEntity, ABC):
         
         self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
             
-        self.sn = config["sn"]
+        self._sn = config["sn"]
 
         self._attr_name = config["name"]+"_地暖"
 
-        self.dname = config["name"]
+        self._dname = config["name"]
 
         self._attr_device_class = COMPONENT
 
@@ -345,9 +348,9 @@ class CustomClimateH(ClimateEntity, ABC):
     def device_info(self) -> DeviceInfo:
         """Information about this entity/device."""
         return {
-            "identifiers": {(DOMAIN, self.sn)},
+            "identifiers": {(DOMAIN, self._sn)},
             # If desired, the name for the device could be different to the entity
-            "name": self.dname,
+            "name": self._dname,
             "manufacturer": MANUFACTURER,
         }
 
@@ -417,8 +420,11 @@ class CustomClimateH(ClimateEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
-                "sn": self.sn,
+                "sn": self._sn,
                 "i": i,
                 "p":
                     {
@@ -565,8 +571,11 @@ class CustomClimateW(CustomClimate):
          message = {
              "seq": 1,
              "rspTo": "A/hass",
+             "s": {
+                "t": 101
+            },
              "data": {
-                 "sn": self.sn,
+                 "sn": self._sn,
                  "i": i,
                  "v": v
              }
@@ -576,7 +585,7 @@ class CustomClimateW(CustomClimate):
            message = {
              "seq": 1,
              "data": {
-                 "sn": self.sn,
+                 "sn": self._sn,
                  "i": i,
                  "p":
                      {

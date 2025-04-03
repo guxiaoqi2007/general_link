@@ -215,6 +215,9 @@ class CustomFan(FanEntity, ABC):
         message = {
             "seq": 1,
             "rspTo": "A/hass",
+            "s": {
+                "t": 101
+            },
             "data": {
                 "sn": self.sn,
                 "i": i,
