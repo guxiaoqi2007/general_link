@@ -29,7 +29,7 @@ async def async_setup_entry(
 
     async def async_discover(config_payload):
         try:
-            _LOGGER.warning(f"CustomSwitch-{config_payload}")
+            
             if "a41" in config_payload:
                 async_add_entities([CustomSwitchA41(hass, config_payload, config_entry)])
             if "a121" in config_payload:
