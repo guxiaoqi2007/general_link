@@ -4,8 +4,8 @@ import asyncio
 import json
 import logging
 import time
-import datetime
-
+from datetime import datetime
+import pytz
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, Event
@@ -20,6 +20,145 @@ from homeassistant.helpers.storage import Store
 
 _LOGGER = logging.getLogger(__name__)
 INPUT_SCHEMA = ['a100','a101','a102','a103']
+SOURCE_TYPE = {
+    1: "云端",
+    2: "移动端APP",
+    3: "场所管理中心（主网关）",
+    4: "子设备",
+    100: "HomeKit",
+    101: "HomeAssistant",
+    102: "天猫精灵",
+    103: "小度音响"
+}
+#目的类型
+DESTINATION_TYPE = {
+    1: "云端",
+    2: "移动端APP",
+    3: "场所管理中心（主网关）",
+    4: "子设备",
+    5: "多设备",
+    6: "组设备"
+}
+NMNLOG_TEMPLATES = {
+    0x00000001: "设备第{0}次启动。",
+    0x00000003: "设备启动{0}秒时，同步到UTC时间。",
+    0x00000500: "自动化执行之计划任务，编号：{0}；场景：{1}",
+    0x00000501: "自动化执行之设备触发，编号：{0}；场景：{1}；设备：{2}；属性：{3}；值：{4}",
+    0x00000600: "执行场景，编号：{0}",
+    0x00010100: "关闭单灯{0}",
+    0x00010101: "打开单灯{0}",
+    0x00010102: "将单灯{0}亮度调整到：{1}%",
+    0x00010103: "调亮单灯{0}",
+    0x00010104: "调暗单灯{0}",
+    0x00010105: "单步调整单灯{0}亮度，步进：{1}%",
+    0x00010106: "将单灯{0}色温调整到：{1}K",
+    0x00010107: "将单灯{0}色温调高一些",
+    0x00010108: "将单灯{0}色温调低一些",
+    0x00010109: "单步调整单灯{0}色温，步进：{1}K",
+    0x0001010A: "将单灯{0}RGB色彩值调整到：#{1}",
+    # 多灯命令
+    0x00010150: "关闭多灯{0}",
+    0x00010151: "打开多灯{0}",
+    0x00010152: "将多灯{0}亮度调整到：{1}%",
+    0x00010153: "调亮多灯{0}",
+    0x00010154: "调暗多灯{0}",
+    0x00010155: "单步调整多灯{0}亮度，步进：{1}%",
+    0x00010156: "将多灯{0}色温调整到：{1}K",
+    0x00010157: "将多灯{0}色温调高一些",
+    0x00010158: "将多灯{0}色温调低一些",
+    0x00010159: "单步调整多灯{0}色温，步进：{1}K",
+    0x0001015A: "将多灯{0}RGB色彩值调整到：#{1}",
+    # 灯组命令
+    0x000101A0: "关闭灯组【房间：{0}，子组：{1}】",
+    0x000101A1: "打开灯组【房间：{0}，子组：{1}】",
+    0x000101A2: "将灯组【房间：{0}，子组：{1}】亮度调整到：{2}%",
+    0x000101A3: "调亮灯组【房间：{0}，子组：{1}】",
+    0x000101A4: "调暗灯组【房间：{0}，子组：{1}】",
+    0x000101A5: "单步调整灯组【房间：{0}，子组：{1}】亮度，步进：{2}%",
+    0x000101A6: "将灯组【房间：{0}，子组：{1}】色温调整到：{2}K",
+    0x000101A7: "将灯组【房间：{0}，子组：{1}】色温调高一些",
+    0x000101A8: "将灯组【房间：{0}，子组：{1}】色温调低一些",
+    0x000101A9: "单步调整灯组【房间：{0}，子组：{1}】色温，步进：{2}K",
+    0x000101AA: "将灯组【房间：{0}，子组：{1}】RGB色彩值调整到：#{2}",
+    # 开关继电器命令
+    0x00010200: "关闭开关{0}的第{1}个继电器",
+    0x00010201: "打开开关{0}的第{1}个继电器",
+    # 单窗帘命令
+    0x00010300: "停止单窗帘{0}",
+    0x00010301: "打开单窗帘{0}",
+    0x00010302: "关闭单窗帘{0}",
+    0x00010303: "将单窗帘{0}行程调整到：{1}%",
+    0x00010308: "向左旋转单窗帘{0}叶片",
+    0x00010309: "向右旋转单窗帘{0}叶片",
+    0x0001030A: "停止旋转单窗帘{0}叶片",
+    0x0001030B: "将单窗帘{0}叶片角度调整到：{1}%",
+    # 多窗帘命令
+    0x00010350: "停止多窗帘{0}",
+    0x00010351: "打开多窗帘{0}",
+    0x00010352: "关闭多窗帘{0}",
+    0x00010353: "将多窗帘{0}行程调整到：{1}%",
+    0x00010358: "向左旋转多窗帘{0}叶片",
+    0x00010359: "向右旋转多窗帘{0}叶片",
+    0x0001035A: "停止旋转多窗帘{0}叶片",
+    0x0001035B: "将多窗帘{0}叶片角度调整到：{1}%",
+    # 窗帘组命令
+    0x000103A0: "停止窗帘组【房间：{0}，子组：{1}】",
+    0x000103A1: "打开窗帘组【房间：{0}，子组：{1}】",
+    0x000103A2: "关闭窗帘组【房间：{0}，子组：{1}】",
+    0x000103A3: "将窗帘组【房间：{0}，子组：{1}】行程调整到：{2}%",
+    0x000103A8: "向左旋转窗帘组【房间：{0}，子组：{1}】叶片",
+    0x000103A9: "向右旋转窗帘组【房间：{0}，子组：{1}】叶片",
+    0x000103AA: "停止旋转窗帘组【房间：{0}，子组：{1}】叶片",
+    0x000103AB: "将窗帘组【房间：{0}，子组：{1}】叶片角度调整到：{2}%",
+    # 单空调命令
+    0x00010B00: "关闭单空调{0}",
+    0x00010B01: "打开单空调{0}",
+    0x00010B02: "将单空调{0}温度调整到：{1}°C",
+    0x00010B03: "将单空调{0}工作模式设置为：自动",
+    0x00010B04: "将单空调{0}工作模式设置为：制冷",
+    0x00010B05: "将单空调{0}工作模式设置为：制热",
+    0x00010B06: "将单空调{0}工作模式设置为：送风",
+    0x00010B07: "将单空调{0}工作模式设置为：除湿",
+    0x00010B08: "将单空调{0}风速模式设置为：自动",
+    0x00010B09: "将单空调{0}风速模式设置为：低风",
+    0x00010B0A: "将单空调{0}风速模式设置为：中低风",
+    0x00010B0B: "将单空调{0}风速模式设置为：中风",
+    0x00010B0C: "将单空调{0}风速模式设置为：中高风",
+    0x00010B0D: "将单空调{0}风速模式设置为：高风",
+    # 空调组命令
+    0x00010BA0: "关闭空调组【房间：{0}】",
+    0x00010BA1: "打开空调组【房间：{0}】",
+    0x00010BA2: "将空调组【房间：{0}】温度调整到：{2}°C",
+    0x00010BA3: "将空调组【房间：{0}】工作模式设置为：自动",
+    0x00010BA4: "将空调组【房间：{0}】工作模式设置为：制冷",
+    0x00010BA5: "将空调组【房间：{0}】工作模式设置为：制热",
+    0x00010BA6: "将空调组【房间：{0}】工作模式设置为：送风",
+    0x00010BA7: "将空调组【房间：{0}】工作模式设置为：除湿",
+    0x00010BA8: "将空调组【房间：{0}】风速模式设置为：自动",
+    0x00010BA9: "将空调组【房间：{0}】风速模式设置为：低风",
+    0x00010BAA: "将空调组【房间：{0}】风速模式设置为：中低风",
+    0x00010BAB: "将空调组【房间：{0}】风速模式设置为：中风",
+    0x00010BAC: "将空调组【房间：{0}】风速模式设置为：中高风",
+    0x00010BAD: "将空调组【房间：{0}】风速模式设置为：高风",
+    # 地暖命令
+    0x00011600: "关闭地暖{0}",
+    0x00011601: "打开地暖{0}",
+    0x00011602: "将地暖{0}温度调整到：{1}°C",
+    # 新风命令
+    0x00011700: "关闭新风{0}",
+    0x00011701: "打开新风{0}",
+    0x00011703: "将新风{0}工作模式设置为：自动",
+    0x00011704: "将新风{0}工作模式设置为：送风",
+    0x00011705: "将新风{0}工作模式设置为：排风",
+    0x00011706: "将新风{0}风速模式设置为：自动",
+    0x00011707: "将新风{0}风速模式设置为：低风",
+    0x00011708: "将新风{0}风速模式设置为：中低风",
+    0x00011709: "将新风{0}风速模式设置为：中风",
+    0x0001170A: "将新风{0}风速模式设置为：中高风",
+    0x0001170B: "将新风{0}风速模式设置为：高风"
+}
+
+
 
 
 class Gateway:
@@ -47,9 +186,14 @@ class Gateway:
         
         
         self.light_group_map = {}
+
         self.room_map = {}
+
+        self.task_automation_map = {}
+           
+        self.scene_map = {}
         # self.room_list = []
-        self.devTypes = [1, 2, 3, 4, 7, 9, 11 ,16, 20]
+        self.devTypes = [1, 2, 3, 4, 5, 7, 9, 11 ,16, 20]
 
         self.reconnect_flag = True
 
@@ -228,6 +372,7 @@ class Gateway:
             scene_list = payload["data"]
             room_map = self.room_map
             for scene in scene_list:
+                self.scene_map[scene["id"]] = scene["name"]
                 scene["unique_id"] = f"{scene['id']}"
                 room_id = scene["room"]
                 if room_id == 0:
@@ -236,6 +381,13 @@ class Gateway:
                     scene["room_name"] = room_map.get(
                         room_id, {}).get('name', "未知房间")
                 await self._add_entity("scene", scene)
+
+        elif topic.endswith("p71"):
+            task_automation_list = payload["data"]
+            for task_automation in task_automation_list:
+                self.task_automation_map[task_automation["id"]] = task_automation["name"]
+
+
         elif topic.endswith("event/3"):
             """Device state data"""
             stats_list = payload["data"]
@@ -276,7 +428,7 @@ class Gateway:
                 }
                 await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 3)
 
-            _LOGGER.warning(f"event/3 data:{payload}")
+            #_LOGGER.warning(f"event/3 data:{payload}")
 
             if flag:
                 await self.sync_group_status(False)
@@ -555,6 +707,7 @@ class Gateway:
             f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p28",
             # Subscribe to all basic data Room list, light group list, curtain group list
             f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p33",
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p71",
             # Subscribe to room and light group relationship
             # f"{MQTT_TOPIC_PREFIX}/center/p31",
             # Subscribe to room and light group relationship
@@ -654,6 +807,8 @@ class Gateway:
                 await asyncio.sleep(3)
                 # publish payload to get scene list
                 await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q28", {})
+                await asyncio.sleep(3)
+                await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q71", {})
                 
                 # await asyncio.sleep(1)
 
@@ -675,8 +830,10 @@ class Gateway:
                 self.init_state = False
                 _LOGGER.error("出了一些问题: %s", err)
 
-    async def async_mqtt_publish(self, topic: str, data: object):
-        return await self._async_mqtt_publish(topic, data, seq = 4)
+    async def async_mqtt_publish(self, topic: str, data: object,n_id = None):
+        if n_id is None:
+            n_id = 4
+        return await self._async_mqtt_publish(topic, data,seq = n_id)
 
     async def mqtt_subscribe_custom(self, subscribe_topic) -> None:
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
@@ -688,21 +845,36 @@ class Gateway:
             topic = msg.topic
             timestamp = msg.timestamp
             
+            
             #_LOGGER.warning(f"msg,{msg}")
 
 
             if payload:
              try:
-                #store = Store(self.hass, 1, f'test/model')
-                #sns_tmp=store.async_load
+                sns_tmp = []
+                data_p = {}
+                store = Store(self.hass, 1, f'test/model')
+                sns_tmp = await store.async_load()
                 payload = json.loads(payload)
-               # model = payload["data"]["list"]
-                #for data_tmp in model:
-                  
-                 # if data_tmp["model"] == "ILight2-S1":
-                 #    sns_tmp.append(data_tmp['sn'])
-                #if sns_tmp:
-                # await store.async_save(sns_tmp)
+                seq = payload["seq"]
+                if seq == 4 :
+                    seq = topic
+                if topic.endswith("p86"):
+                    payload = self.log_data(payload)
+                if topic.endswith("p5") and seq == 88:
+                 data_all = payload["data"]["list"]
+                 
+                 for data_tmp in data_all:
+                   data_p["name"] = data_tmp["name"]
+                   data_p["sn"] = data_tmp["sn"]
+                   data_p["model"] = data_tmp["model"]
+                   data_p["state"] = data_tmp["state"]
+                   data_p["timestamp"] = timestamp
+                   sns_tmp.append(data_p)
+                   #if data_tmp["model"] == "ILight2-S1":
+                   #   sns_tmp.append(data_tmp['sn'])
+                if sns_tmp is not None:
+                  await store.async_save(sns_tmp)
                 #_LOGGER.warning(f"topic,{topic} payload,{payload}")
 
                 # store = Store(self.hass, 1, f'test/{topic}')
@@ -717,7 +889,7 @@ class Gateway:
             #payload["timestamp"] = timestamp.isoformat()
             message = json.dumps(payload,ensure_ascii=False,indent=4)
             await self.hass.services.async_call( "persistent_notification", "create", 
-             {"title":topic,"message": message,"notification_id": topic}, blocking=True)
+             {"title":topic,"message": message,"notification_id": seq}, blocking=True)
   
 
     async def _async_mqtt_publish(self, topic: str, data: object, seq=2):
@@ -734,3 +906,94 @@ class Gateway:
             0,
             False
         )
+    def log_data(self,json_data):
+  
+    # 确保json_data是字典类型
+     if not isinstance(json_data, dict):
+        raise ValueError("输入数据必须是字典类型")
+    
+     data_list = json_data.get('data', {}).get('list', [])
+    
+     for item in data_list:
+        # 获取时间戳
+        timestamp = item.get('t')
+        data_i = item.get('i')
+        data_s_t = item.get('s')
+        if data_s_t is not None:
+            data_s_t = item.get('s').get('t')
+        data_d_t = item.get('d')
+        if data_d_t is not None:
+            data_d_t = item.get('d').get('t')
+        data_r_t = item.get('r')
+        if data_r_t is not None:
+            data_r_t = item.get('r').get('t')
+        #del item['p']
+        #del item['r']
+        if timestamp is not None:
+            # 将Unix时间戳转换为datetime对象，并格式化为字符串
+            readable_time = datetime.utcfromtimestamp(timestamp).replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M:%S')  # 使用UTC+8时间
+            # 或者使用以下行来获取本地时间：
+            item['时间'] = readable_time
+            
+        if  data_s_t is not None:
+            item['s']['t'] = SOURCE_TYPE[data_s_t]
+            item['源信息'] = item['s'] 
+            del item['s']
+        if  data_d_t is not None:
+            item['d']['t'] = DESTINATION_TYPE[data_d_t]
+            item['目的信息'] = item['d'] 
+            del item['d']
+        if  data_r_t is not None:
+            item['r']['t'] = SOURCE_TYPE[data_r_t]
+            item['记录信息'] = item['r'] 
+            del item['r']
+        if data_i == 0x00000501:
+            item['i'] = '自动化执行'
+            if self.scene_map is not None and self.task_automation_map is not None:
+              _LOGGER.warning(f"场景map{self.scene_map}")
+              item['m'][0]= f"{item['m'][0]}-{self.task_automation_map[int(item['m'][0])]}"
+              item['m'][1]= f"{item['m'][1]}-{self.scene_map[int(item['m'][1])]}"
+        elif data_i == 65953:
+            item['i'] = '打开灯组'
+            if self.light_group_map is not None:
+              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+              item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+        elif data_i == 65952:
+            item['i'] = '关闭灯组'
+            if self.light_group_map is not None:
+              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+              item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+        elif data_i >= 0x000101A2 and data_i <= 0x000101AA:
+            item['i'] = '调节灯组'
+            if self.light_group_map is not None:
+              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+              item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+        elif data_i >= 0x000103A0 and data_i <= 0x000103AB:
+            item['i'] = '控制窗帘组'
+            if self.room_map is not None:
+              item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+              #item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+        
+        elif data_i == 0x00000600 :
+             item['i'] = '执行场景'
+             item['m'][0]= f"{item['m'][0]}-{self.scene_map[int(item['m'][0])]}"
+        
+        item['控制'] = item['i']
+        item['消息'] = NMNLOG_TEMPLATES[data_i].format(*item['m'])
+        
+        del item['t']
+        del item['m']
+        if item.get('u') is not None:
+            del item['u']
+        if item.get('p') is not None:
+            del item['p']
+        if item.get('f') is not None:
+            del item['f']
+        if item.get('i') is not None:
+            del item['i']
+    
+    
+     return json_data

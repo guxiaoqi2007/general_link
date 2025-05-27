@@ -19,6 +19,52 @@ custom_push_mqtt:
         json:
           multiline: false
           placeholder: "请输入 JSON 格式的数据"
+    n_id:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入 通知id 留空为 topic"
+log_query:
+  # 服务接受的字段
+  fields:
+    # 发送的数据
+    place_id:
+      required: true
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "输入场所id"
+    start:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "开始位置"
+    max:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "每页显示位置"
+    place_id:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入 JSON 格式的数据"
+    n_id:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入 通知id 留空为 topic"
 
 get_backupconfig:
   fields:

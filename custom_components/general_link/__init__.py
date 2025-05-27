@@ -105,11 +105,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         topic = call.data.get("topic", "P/0/center/q24")
         data = call.data.get("data")
+        n_id = call.data.get("n_id")
         sns = call.data.get("sns")
         sns1 = call.data.get("sns1")
         global temp_ll
+        #subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{topic.split('/')[1]}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
         subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
-        
         
         if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
            await hub.mqtt_subscribe_custom(subscribe_topic)
@@ -120,17 +121,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         #  data = call.data
         # else:
         
-        await hub.async_mqtt_publish(topic, data)
+        await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
         if sns is not None:
             for sn in sns:
              #休眠1s
-             await asyncio.sleep(2)
+             await asyncio.sleep(1)
              data["sn"] = sn
              await hub.async_mqtt_publish(topic, data)
         if sns1 is not None:
             for sn in sns1:
              #休眠1s
-             await asyncio.sleep(2)
+             await asyncio.sleep(1)
              data["sns"] = [sn]
              await hub.async_mqtt_publish(topic, data)
 
@@ -142,13 +143,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt)
 
-    async def del_ILight2_S1(call):
-
-        topic = call.data.get("topic", "P/0/center/q24")
-        data = call.data.get("data")
+    async def log_query(call):
+        place_id = call.data.get("place_id")
+        topic = f"P/{place_id}/center/q86"
+        n_id = call.data.get("n_id")
+        start = call.data.get("start",0)
+        time_start = call.data.get("time_start")
+        time_end = call.data.get("time_end")
+        max = call.data.get("max",128)
         global temp_ll
         subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
-        
+        data_dicp={ "start":int(start), "time_start":time_start, "time_end":time_end, "max":int(max)}
         
         if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
            await hub.mqtt_subscribe_custom(subscribe_topic)
@@ -158,7 +163,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         #  data = call.data
         # else:
 
-        await hub.async_mqtt_publish(topic, data)
+        await hub.async_mqtt_publish(topic, data_dicp,n_id = int(n_id))
 
 
 
@@ -166,7 +171,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         return True
 
-    hass.services.async_register(DOMAIN, "del_ILight2-S1", del_ILight2_S1)
+    hass.services.async_register(DOMAIN, "log_query", log_query)
 
 
     
