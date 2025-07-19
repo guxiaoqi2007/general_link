@@ -3,21 +3,70 @@ from __future__ import annotations
 
 import json
 import logging
+import homeassistant.util.dt as dt_util
 from abc import ABC
-
+from typing import Any
+from homeassistant.components import media_source
 from homeassistant.components.media_player import MediaPlayerEntity, MediaType, MediaPlayerState, \
-    MediaPlayerEntityFeature, RepeatMode
+    MediaPlayerEntityFeature, RepeatMode,BrowseMedia
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from urllib.parse import urlparse, parse_qs, parse_qsl, quote
+from homeassistant.components.media_player.const import (
+    MEDIA_CLASS_ALBUM,
+    MEDIA_CLASS_ARTIST,
+    MEDIA_CLASS_CHANNEL,
+    MEDIA_CLASS_DIRECTORY,
+    MEDIA_CLASS_EPISODE,
+    MEDIA_CLASS_MOVIE,
+    MEDIA_CLASS_MUSIC,
+    MEDIA_CLASS_PLAYLIST,
+    MEDIA_CLASS_SEASON,
+    MEDIA_CLASS_TRACK,
+    MEDIA_CLASS_TV_SHOW,
+    MEDIA_TYPE_ALBUM,
+    MEDIA_TYPE_ARTIST,
+    MEDIA_TYPE_CHANNEL,
+    MEDIA_TYPE_EPISODE,
+    MEDIA_TYPE_MUSIC,
+    MEDIA_TYPE_MOVIE,
+    MEDIA_TYPE_PLAYLIST,
+    MEDIA_TYPE_SEASON,
+    MEDIA_TYPE_TRACK,
+    MEDIA_TYPE_TVSHOW,
+)
 
 from .const import MQTT_CLIENT_INSTANCE, \
-    EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CACHE_ENTITY_STATE_UPDATE_KEY_DICT
+    EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CACHE_ENTITY_STATE_UPDATE_KEY_DICT,MQTT_TOPIC_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
 
 COMPONENT = "media_player"
+
+CHILD_TYPE_MEDIA_CLASS = {
+    MEDIA_TYPE_SEASON: MEDIA_CLASS_SEASON,
+    MEDIA_TYPE_ALBUM: MEDIA_CLASS_ALBUM,
+    MEDIA_TYPE_MUSIC: MEDIA_CLASS_MUSIC,
+    MEDIA_TYPE_ARTIST: MEDIA_CLASS_ARTIST,
+    MEDIA_TYPE_MOVIE: MEDIA_CLASS_MOVIE,
+    MEDIA_TYPE_PLAYLIST: MEDIA_CLASS_PLAYLIST,
+    MEDIA_TYPE_TRACK: MEDIA_CLASS_TRACK,
+    MEDIA_TYPE_TVSHOW: MEDIA_CLASS_TV_SHOW,
+    MEDIA_TYPE_CHANNEL: MEDIA_CLASS_CHANNEL,
+    MEDIA_TYPE_EPISODE: MEDIA_CLASS_EPISODE,
+    
+}
+
+protocol = 'cloudmusic://'
+class CloudMusicRouter():
+
+    media_source = 'media-source://'
+    local_playlist = f'{protocol}local/playlist'
+
+    toplist = f'{protocol}toplist'
+    playlist = f'{protocol}playlist'
 
 
 async def async_setup_entry(
@@ -52,13 +101,20 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         self._name = config["name"]
         self._attr_unique_id = config["unique_id"]
         self.sn = config["sn"]
-
+        
         self._status = MediaPlayerState.PAUSED
         self._muted = False
         self._volume = False
         self._repeat = RepeatMode.OFF
         self._shuffle = False
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
+        self.num = config["num"]
+        self.playlist_tmp =[]
+        self._media_title = ""
+        self._media_duration = None
+        self._media_position = None
+        self._media_position_updated_at = None
+        
 
         self.update_state(config)
 
@@ -78,10 +134,13 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             self.update_state(data)
         except Exception:
             raise
+    
 
     def update_state(self, data):
         """Light event reporting changes the light state in HA"""
-
+        if  "names" in data:
+            self.playlist_tmp = data.get("names", [])
+        
         if "playState" in data:
             if data["playState"] == 0:
                 self._status = MediaPlayerState.PAUSED
@@ -96,6 +155,17 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
                 self._muted = True
             else:
                 self._muted = False
+        
+        if "playingTime" in data:
+            self._media_position = data["playingTime"]
+            self._media_position_updated_at = dt_util.utcnow()
+        
+        if "playingWholeTime" in data:
+            self._media_duration = data["playingWholeTime"]
+        
+        if "playingId" in data:
+            if self.playlist_tmp:
+                self._media_title = self.playlist_tmp[data["playingId"]]
 
         if "playMode" in data:
             if data["playMode"] == 0:
@@ -110,6 +180,23 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             elif data["playMode"] == 3:
                 self._shuffle = True
                 self._repeat = RepeatMode.OFF
+       
+    @property
+    def media_duration(self):
+        """返回媒体的总时长（单位：秒）"""
+        return self._media_duration
+
+    @property
+    def media_position(self):
+        """返回当前播放的位置（单位：秒）"""
+        return self._media_position
+    @property
+    def media_position_updated_at(self):
+        """Last valid time of media position."""
+        return self._media_position_updated_at
+    @property
+    def media_title(self):
+        return self._media_title
 
     @property
     def available(self):
@@ -143,13 +230,24 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
                 | MediaPlayerEntityFeature.PREVIOUS_TRACK
                 | MediaPlayerEntityFeature.PAUSE
                 | MediaPlayerEntityFeature.PLAY
+                | MediaPlayerEntityFeature.PLAY_MEDIA
                 | MediaPlayerEntityFeature.REPEAT_SET
                 | MediaPlayerEntityFeature.SELECT_SOUND_MODE
                 | MediaPlayerEntityFeature.SHUFFLE_SET
+                | MediaPlayerEntityFeature.BROWSE_MEDIA
+                | MediaPlayerEntityFeature.SEEK
         )
 
         return supported
-
+    async def async_media_seek(self, position: float) -> None:
+        """Send seek command."""
+        data = {
+            "action": 31,
+            "time": int(position)
+        }
+        self._media_position = position
+        self._media_position_updated_at = dt_util.utcnow()
+        await self.exec_command(data)
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume of media player."""
         _LOGGER.warning("async_set_volume_level %s ", volume)
@@ -212,6 +310,93 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         await self.exec_command(data)
         self._status = MediaPlayerState.PLAYING
 
+    async def async_browse_media(
+        self, media_content_type: str | None = None, media_content_id: str | None = None
+    ) -> BrowseMedia:
+       # return await media_source.async_browse_media(
+       #     self.hass,
+       #     media_content_id,
+       #     content_filter=lambda item: item.media_content_type.startswith("audio/"),
+       # )
+       await self.exec_command_playlist({})
+        
+       if media_content_id in [None, protocol]:
+        children = [
+            {
+                'title': '播放列表',
+                'path': CloudMusicRouter.local_playlist,
+                'type': MEDIA_TYPE_PLAYLIST
+            }
+        ]
+        library_info = BrowseMedia(
+            media_class=MEDIA_CLASS_DIRECTORY,
+            media_content_id=protocol,
+            media_content_type=MEDIA_TYPE_CHANNEL,
+            title="本地音乐",
+            can_play=False,
+            can_expand=True,
+            children=[],
+        )
+        for item in children:
+            title = item['title']
+            media_content_type = item['type']
+            media_content_id = item['path']
+            if '?' not in media_content_id:
+                media_content_id = media_content_id + f'?title={quote(title)}'
+            thumbnail = item.get('thumbnail')
+           # if thumbnail is not None and 'music.126.net' in thumbnail:
+                #thumbnail = cloud_music.netease_image_url(thumbnail)
+            library_info.children.append(
+                BrowseMedia(
+                    title=title,
+                    media_class=CHILD_TYPE_MEDIA_CLASS[media_content_type],
+                    media_content_type=media_content_type,
+                    media_content_id=media_content_id,
+                    can_play=False,
+                    can_expand=True,
+                    thumbnail=thumbnail
+                )
+            )
+        return library_info
+       if media_content_id.startswith(CloudMusicRouter.local_playlist):
+        # 本地播放列表
+        library_info = BrowseMedia(
+            media_class=MEDIA_CLASS_DIRECTORY,
+            media_content_id=media_content_id,
+            media_content_type=MEDIA_TYPE_PLAYLIST,
+            title="播放列表",
+            can_play=False,
+            can_expand=False,
+            children=[],
+        )
+
+        playlist = [] if hasattr(self, 'playlist') == False else self.playlist
+        if self.playlist_tmp is not []:
+            playlist = self.playlist_tmp 
+        for index, title in enumerate(playlist):
+            library_info.children.append(
+                BrowseMedia(
+                    title=title,
+                    media_class=MEDIA_CLASS_MUSIC,
+                    media_content_type="MEDIA_TYPE_PLAYLIST",
+                    media_content_id=str(index),
+                    can_play=True,
+                    can_expand=False,
+                    thumbnail="https://p1.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg"
+                )
+            )
+        return library_info
+    async def async_play_media(
+        self, media_type: str, media_id: str, **kwargs: Any
+    ) -> None:
+        #_LOGGER.warning("Playing media: %s, %s, %s", media_type, media_id, kwargs)
+        if media_id:
+            data = {
+                "action": 29,
+                "id": int(media_id)
+            }
+            await self.exec_command(data)
+            self._media_title = self.playlist_tmp[int(media_id)]
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute. Emulated with set_volume_level."""
         if mute:
@@ -287,14 +472,28 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
 
         message = {
             "seq": 1,
-            "s": {
-                "t": 101
-            },
+            "rspTo": f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}",
             "data": data
         }
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
             f"P/{self.mqttAddr}/center/q56",
+            json.dumps(message),
+            0,
+            False
+        )
+    async def exec_command_playlist(self, data: dict):
+
+        data["sn"] = self.unique_id
+
+        message = {
+            "seq": self.num,
+            "rspTo": f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}",
+            "data": data
+        }
+
+        await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
+            f"P/{self.mqttAddr}/center/q55",
             json.dumps(message),
             0,
             False

@@ -203,6 +203,10 @@ class Gateway:
 
         self.sns = []
 
+        self.media_player_sn = {}
+
+        self.n_tmp = 10000
+
         """Lighting Control Type"""
         self.light_device_type = entry.data[CONF_LIGHT_DEVICE_TYPE]
 
@@ -250,8 +254,9 @@ class Gateway:
             elif device_type == 1 and self.light_device_type == "single":
                 """Light"""
                 device["is_group"] = False
-                await self._add_entity("light", device)
                 await self._add_entity("button", device)
+                await self._add_entity("light", device)
+                
             elif device_type == 11:
                 """Climate"""
                 await self._add_entity("climate", device)
@@ -294,7 +299,15 @@ class Gateway:
                     self.sns.append(device['sn'])
             elif device_type == 5:
                 """MediaPlayer"""
-                await self._add_entity("media_player", device)
+                #self.media_player_sn.append(device['sn'])
+                if device['sn'] not in self.media_player_sn:
+                    self.media_player_sn[device['sn']] = self.n_tmp 
+                    device["num"] = self.n_tmp 
+                    await self._add_entity("media_player", device)
+                    self.n_tmp  += 1
+                else :
+                    pass
+                
             if "subgroup" in device:
                 self.device_map[device['sn']] = {
                     "room": device['room'],
@@ -478,7 +491,14 @@ class Gateway:
         #        room_id = room["room"]
         #        self.room_list.append(room_id)
         #    await self.sync_group_status(True)
-
+        elif topic.endswith("p55"):
+            reversed_dict = {value: key for key, value in self.media_player_sn.items()}
+            #_LOGGER.warning(f"p55 reversed_dict:{reversed_dict}")
+            
+            async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        reversed_dict[payload["seq"]]), payload["data"]
+                )
         elif topic.endswith("p82"):
             tmp_lights = {}
             room_map = self.room_map
@@ -708,6 +728,8 @@ class Gateway:
             # Subscribe to all basic data Room list, light group list, curtain group list
             f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p33",
             f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p71",
+
+            f"{MQTT_TOPIC_PREFIX}/{self.mqttAddr}/center/p55",
             # Subscribe to room and light group relationship
             # f"{MQTT_TOPIC_PREFIX}/center/p31",
             # Subscribe to room and light group relationship

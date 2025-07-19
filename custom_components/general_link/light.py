@@ -20,9 +20,9 @@ _LOGGER = logging.getLogger(__name__)
 
 COMPONENT = "light"
 
-LIGHT_MIN_KELVIN = 153
+LIGHT_MIN_KELVIN = 158
 
-LIGHT_MAX_KELVIN = 500
+LIGHT_MAX_KELVIN = 370
 
 LIGHT_MHT_MIN_KELVIN = 2700
 
@@ -61,10 +61,15 @@ class CustomLight(LightEntity):
 
     should_poll = False
 
+    #_attr_max_mireds: int = 370  # 2700 K
+    #_attr_min_mireds: int = 158  # 6300 K
+
     def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
         self._attr_unique_id = config["unique_id"]
 
         self._attr_name = config["name"]
+
+        self._name = config["name"]
 
         self._attr_max_mireds = LIGHT_MAX_KELVIN
 
@@ -77,6 +82,7 @@ class CustomLight(LightEntity):
         self.is_group = config["is_group"]
 
         self._attr_color_mode = ColorMode.COLOR_TEMP
+        
 
         self._attr_supported_color_modes: set[ColorMode] = set()
 
@@ -88,10 +94,18 @@ class CustomLight(LightEntity):
             self.room = int(config["room"])
             self.subgroup = int(config["subgroup"])
             self._attr_supported_color_modes.add(ColorMode.RGB)
+            self._custom_property = self.subgroup
             self._attr_color_mode = ColorMode.RGB
         else:
             self._model = config["model"]
             self.sn = config["sn"]
+            self._attr_available = True
+            self._custom_property = self.sn
+            self._attr_extra_state_attributes = {
+
+                "model": self._model,
+                "sn": self.sn,
+            }
             if ColorMode.RGB in config:
                 self._attr_supported_color_modes.add(ColorMode.RGB)
                 self._attr_color_mode = ColorMode.RGB
@@ -115,7 +129,7 @@ class CustomLight(LightEntity):
             )
             hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
             config_entry.async_on_unload(unsub)
-
+    
     @callback
     def async_discover(self, data: dict) -> None:
         try:
@@ -132,7 +146,7 @@ class CustomLight(LightEntity):
             "identifiers": {(DOMAIN, self.unique_id)},
             #"serial_number": self.sn,
             # If desired, the name for the device could be different to the entity
-            "name": self.name,
+            "name": self._name,
             "manufacturer": MANUFACTURER,
          }
         else:
@@ -141,7 +155,7 @@ class CustomLight(LightEntity):
                 "serial_number": self.sn,
                 "model": self._model,
                 # If desired, the name for the device could be different to the entity
-                "name": self.name,
+                "name": self._name,
                 "manufacturer": MANUFACTURER,
             }
 
@@ -159,7 +173,11 @@ class CustomLight(LightEntity):
 
     def update_state(self, data):
         """Light event reporting changes the light state in HA"""
-
+        if "state" in data:
+            if data["state"] != 0:
+                self._attr_available = True
+            else:
+                self._attr_available = False
         if "on" in data:
             if data["on"] == 0:
                 self.on_off = False
@@ -275,12 +293,15 @@ class CustomLight(LightEntity):
             message["data"]["on"] = int(on)
 
         if level is not None:
+            message["data"]["over"] = 1
             message["data"]["level"] = level
 
         if kelvin is not None:
+            message["data"]["over"] = 1
             message["data"]["kelvin"] = kelvin
 
         if rgb is not None:
+            message["data"]["over"] = 1
             message["data"]["rgb"] = rgb
 
         await self.hass.data[MQTT_CLIENT_INSTANCE].async_publish(
