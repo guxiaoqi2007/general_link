@@ -1,5 +1,6 @@
 {
   "name": "general_link",
   "render_readme": true,
+  "homeassistant": "2024.4.1",
   "country": "CN"
 }
