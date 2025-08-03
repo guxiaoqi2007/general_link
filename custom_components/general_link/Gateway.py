@@ -5,7 +5,8 @@ import json
 import logging
 import time
 from datetime import datetime
-import pytz
+from zoneinfo import ZoneInfo
+from homeassistant.helpers import area_registry as ar
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, Event
@@ -45,17 +46,17 @@ NMNLOG_TEMPLATES = {
     0x00000500: "自动化执行之计划任务，编号：{0}；场景：{1}",
     0x00000501: "自动化执行之设备触发，编号：{0}；场景：{1}；设备：{2}；属性：{3}；值：{4}",
     0x00000600: "执行场景，编号：{0}",
-    0x00010100: "关闭单灯{0}",
-    0x00010101: "打开单灯{0}",
-    0x00010102: "将单灯{0}亮度调整到：{1}%",
-    0x00010103: "调亮单灯{0}",
-    0x00010104: "调暗单灯{0}",
-    0x00010105: "单步调整单灯{0}亮度，步进：{1}%",
-    0x00010106: "将单灯{0}色温调整到：{1}K",
-    0x00010107: "将单灯{0}色温调高一些",
+    0x00010100: "关闭单灯{0},名称{1}",
+    0x00010101: "打开单灯{0},名称{1}",
+    0x00010102: "将单灯{0}亮度调整到：{1}%，名称{2}",
+    0x00010103: "调亮单灯{0},名称{2}",
+    0x00010104: "调暗单灯{0},名称{2}",
+    0x00010105: "单步调整单灯{0}亮度，步进：{1}%, 名称{2}",
+    0x00010106: "将单灯{0}色温调整到：{1}K, 名称{2}",
+    0x00010107: "将单灯{0}色温调高一些 ",
     0x00010108: "将单灯{0}色温调低一些",
-    0x00010109: "单步调整单灯{0}色温，步进：{1}K",
-    0x0001010A: "将单灯{0}RGB色彩值调整到：#{1}",
+    0x00010109: "单步调整单灯{0}色温，步进：{1}K, 名称{2}",
+    0x0001010A: "将单灯{0}RGB色彩值调整到:#{1}, 名称{2}",
     # 多灯命令
     0x00010150: "关闭多灯{0}",
     0x00010151: "打开多灯{0}",
@@ -67,7 +68,7 @@ NMNLOG_TEMPLATES = {
     0x00010157: "将多灯{0}色温调高一些",
     0x00010158: "将多灯{0}色温调低一些",
     0x00010159: "单步调整多灯{0}色温，步进：{1}K",
-    0x0001015A: "将多灯{0}RGB色彩值调整到：#{1}",
+    0x0001015A: "将多灯{0}RGB色彩值调整到:#{1}",
     # 灯组命令
     0x000101A0: "关闭灯组【房间：{0}，子组：{1}】",
     0x000101A1: "打开灯组【房间：{0}，子组：{1}】",
@@ -215,6 +216,7 @@ class Gateway:
             self._entry,
             self._entry.data,
         )
+        
 
         async def async_stop_mqtt(_event: Event):
             """Stop MQTT component."""
@@ -225,10 +227,20 @@ class Gateway:
 
     async def reconnect(self, entry: ConfigEntry):
         """Reconnect gateway MQTT"""
-        _LOGGER.warning("重新连接 async  reconnect")
+        #_LOGGER.warning("重新连接 async  reconnect")
         mqtt_client: MqttClient = self.hass.data[MQTT_CLIENT_INSTANCE]
         mqtt_client.conf = entry.data
         await mqtt_client.async_disconnect()
+
+        self.hass.data[MQTT_CLIENT_INSTANCE] = MqttClient(
+            self.hass,
+            self._entry,
+            self._entry.data,
+        )
+
+        mqtt_client: MqttClient = self.hass.data[MQTT_CLIENT_INSTANCE]
+        mqtt_client.conf = entry.data
+
         mqtt_client.init_client()
         await mqtt_client.async_connect()
 
@@ -254,7 +266,7 @@ class Gateway:
             elif device_type == 1 and self.light_device_type == "single":
                 """Light"""
                 device["is_group"] = False
-                await self._add_entity("button", device)
+                #await self._add_entity("button", device)
                 await self._add_entity("light", device)
                 
             elif device_type == 11:
@@ -332,7 +344,7 @@ class Gateway:
                 
 
             except ValueError:
-                _LOGGER.warning("Unable to parse JSON: '%s'", payload)
+                _LOGGER.error("Unable to parse JSON: '%s'", payload)
                 return
         else:
             _LOGGER.warning("JSON None")
@@ -407,7 +419,8 @@ class Gateway:
 
             string_array = ["sn", "workingTime", "powerSavings"]
             # 过滤不用查询的字段
-            string_filter = ["a109", "a15", "travel","relays"]
+            
+            string_filter = ["a109", "a15", "travel","relays","playState","playingId","playingTime","playingWholeTime"]
 
             string_light_filter = ["on", "rgb", "level", "kelvin"]
 
@@ -453,7 +466,18 @@ class Gateway:
             #payload["timestamp"] = timestamp.isoformat()
             message = json.dumps(payload,ensure_ascii=False,indent=4)
             await self.hass.services.async_call( "persistent_notification", "create", {"title":topic,"message": message,"notification_id": topic}, blocking=True)
-            
+        
+        elif topic.endswith("report/q8"):
+            log_data = payload["data"].get("list")
+            #_LOGGER.warning(f"！！！！report/q8:{log_data}")
+            for i in log_data:
+             self.hass.bus.async_fire(
+             "report_q8",
+             {
+               "message": "日志上报",
+               "log": f"{i}"
+             }
+             )
 
         elif topic.endswith("event/5"):
             group_list = payload["data"]
@@ -477,12 +501,16 @@ class Gateway:
 
         elif topic.endswith("p33"):
             """Basic data, including room information, light group information, curtain group information"""
+            registry = ar.async_get(self.hass)
+            
             for room in payload["data"]["rooms"]:
                 self.room_map[room["id"]] = room
             for lightGroup in payload["data"]["lightsSubgroups"]:
                 self.light_group_map[lightGroup["id"]] = lightGroup
             self.room_map[0] = {'id': 0, 'name': '全屋', 'icon': 1}
             self.light_group_map[0] = {'id': 0, 'name': '所有灯', 'icon': 1}
+            for key,value in self.room_map.items():
+                registry.async_get_or_create(value.get("name"))
 
         # elif topic.endswith("p31"):
         #   """Relationship data for rooms and groups"""
@@ -552,6 +580,7 @@ class Gateway:
         """
 
     async def _exec_event_3(self, data):
+        _LOGGER.warning(f"exec_event_3  {data}")
         if "relays" in data:
             for relay, is_on in enumerate(data["relays"]):
                 status = {
@@ -746,6 +775,11 @@ class Gateway:
             f"p/{self.mqttAddr}/report/q7",
 
         ]
+        if CONF_CERTIFICATE not in self._entry.data:
+            discovery_topics.append("p/+/event/3")
+        elif CONF_CERTIFICATE in self._entry.data:
+            discovery_topics.append(f"p/{self.mqttAddr}/report/q8")
+
 
        # for subscribe_topic in discovery_topics:
           #  self.hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
@@ -758,11 +792,15 @@ class Gateway:
             _LOGGER.warning("重新连接mqtt+++++++++++++++++++++++++++++++++++++++")
         else:
             _LOGGER.warning("没有重新连接mqtt--------------------------------------")
-
+        
         mqtt_connected = self.hass.data[MQTT_CLIENT_INSTANCE].connected
+
         while not mqtt_connected:
-            await asyncio.sleep(1)
+            
+            #await self.reconnect(entry)
+            await asyncio.sleep(3)
             mqtt_connected = self.hass.data[MQTT_CLIENT_INSTANCE].connected
+           
             _LOGGER.warning("is_init 1 %s mqtt_connected %s",
                             is_init, mqtt_connected)
             try_connect_times = try_connect_times - 1
@@ -953,7 +991,8 @@ class Gateway:
         #del item['r']
         if timestamp is not None:
             # 将Unix时间戳转换为datetime对象，并格式化为字符串
-            readable_time = datetime.utcfromtimestamp(timestamp).replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M:%S')  # 使用UTC+8时间
+            #readable_time = datetime.utcfromtimestamp(timestamp).replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai')).strftime('%Y-%m-%d %H:%M:%S')  # 使用UTC+8时间
+            readable_time = (datetime.fromtimestamp(timestamp, tz=ZoneInfo("UTC")).astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
             # 或者使用以下行来获取本地时间：
             item['时间'] = readable_time
             
@@ -972,25 +1011,25 @@ class Gateway:
         if data_i == 0x00000501:
             item['i'] = '自动化执行'
             if self.scene_map is not None and self.task_automation_map is not None:
-              _LOGGER.warning(f"场景map{self.scene_map}")
+             
               item['m'][0]= f"{item['m'][0]}-{self.task_automation_map[int(item['m'][0])]}"
               item['m'][1]= f"{item['m'][1]}-{self.scene_map[int(item['m'][1])]}"
         elif data_i == 65953:
             item['i'] = '打开灯组'
             if self.light_group_map is not None:
-              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              
               item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
               item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
         elif data_i == 65952:
             item['i'] = '关闭灯组'
             if self.light_group_map is not None:
-              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              
               item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
               item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
         elif data_i >= 0x000101A2 and data_i <= 0x000101AA:
             item['i'] = '调节灯组'
             if self.light_group_map is not None:
-              _LOGGER.warning(f"灯组map{self.light_group_map}")
+              
               item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
               item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
         elif data_i >= 0x000103A0 and data_i <= 0x000103AB:
@@ -1002,6 +1041,19 @@ class Gateway:
         elif data_i == 0x00000600 :
              item['i'] = '执行场景'
              item['m'][0]= f"{item['m'][0]}-{self.scene_map[int(item['m'][0])]}"
+        elif data_i == 0x00010200 :
+             item['i'] = '关闭继电器'
+        elif data_i == 0x00010201 :
+             item['i'] = '打开继电器'
+        elif data_i >= 0x00010B00 and data_i <= 0x00010B0D:
+            item['i'] = '控制单空调'
+        elif data_i >= 0x00010100 and data_i <= 0x0001010A:
+            item['i'] = '控制单灯'
+            
+        elif data_i >= 0x00010BA0 and data_i <= 0x00010BAD:
+            item['i'] = '控制空调组'
+            if self.room_map is not None:
+              item['m'][0]= f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
         
         item['控制'] = item['i']
         item['消息'] = NMNLOG_TEMPLATES[data_i].format(*item['m'])

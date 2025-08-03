@@ -42,5 +42,6 @@ PLATFORMS: list[str] = [
     "binary_sensor",
     "switch",
     "climate",
-    "media_player"
+    "media_player",
+    "event",
 ]
