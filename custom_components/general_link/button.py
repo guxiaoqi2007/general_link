@@ -71,8 +71,8 @@ class RebootButton(ButtonEntity,ABC):
             "identifiers": {(DOMAIN, self.sn)},
             "serial_number": self.sn,
             "model": self._model,
-            "name": "重启设备",
             "manufacturer": MANUFACTURER,
+            "name": "重启-设备"
         }
 
     async def async_press(self) -> None:
