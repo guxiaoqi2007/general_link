@@ -51,13 +51,6 @@ log_query:
         text:
           multiline: false
           placeholder: "每页显示位置"
-    place_id:
-      required: false
-      example: "-"
-      selector:
-        text:
-          multiline: false
-          placeholder: "请输入 JSON 格式的数据"
     n_id:
       required: false
       example: "-"
@@ -106,4 +99,5 @@ get_backupconfig:
       selector:
         text:
           multiline: false
+
           placeholder: "请输envKey"
