@@ -10,6 +10,7 @@ from homeassistant.components import media_source
 from homeassistant.components.media_player import MediaPlayerEntity, MediaType, MediaPlayerState, \
     MediaPlayerEntityFeature, RepeatMode,BrowseMedia
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -38,8 +39,9 @@ from homeassistant.components.media_player.const import (
     MEDIA_TYPE_TVSHOW,
 )
 
-from .const import MQTT_CLIENT_INSTANCE, \
-    EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CACHE_ENTITY_STATE_UPDATE_KEY_DICT,MQTT_TOPIC_PREFIX
+from .const import MQTT_CLIENT_INSTANCE, MANUFACTURER,\
+    EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE,\
+    CACHE_ENTITY_STATE_UPDATE_KEY_DICT,MQTT_TOPIC_PREFIX,DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ CHILD_TYPE_MEDIA_CLASS = {
     
 }
 
-protocol = 'cloudmusic://'
+protocol = 'music://'
 class CloudMusicRouter():
 
     media_source = 'media-source://'
@@ -101,7 +103,8 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         self._name = config["name"]
         self._attr_unique_id = config["unique_id"]
         self.sn = config["sn"]
-        
+        self._model = config["model"]
+        self.hass = hass
         self._status = MediaPlayerState.PAUSED
         self._muted = False
         self._volume = False
@@ -111,12 +114,15 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         self.num = config["num"]
         self.playlist_tmp =[]
         self._media_title = ""
+        self._media_artist = None
         self._media_duration = None
         self._media_position = None
         self._media_position_updated_at = None
+        self._currentsong = self._media_title
         
 
         self.update_state(config)
+        
 
         """Add a device state change event listener, and execute the specified method when the device state changes. 
         Note: It is necessary to determine whether an event listener has been added here to avoid repeated additions."""
@@ -127,14 +133,24 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             )
             hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
             config_entry.async_on_unload(unsub)
-
+        self.get_playlist()
     @callback
     def async_discover(self, data: dict) -> None:
         try:
             self.update_state(data)
         except Exception:
             raise
-    
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Information about this entity/device."""
+        return {
+            "identifiers": {(DOMAIN, self.sn)},
+            "serial_number": self.sn,
+            "model": self._model,
+            # If desired, the name for the device could be different to the entity
+            "name": self._name,
+            "manufacturer": MANUFACTURER,
+        }
 
     def update_state(self, data):
         """Light event reporting changes the light state in HA"""
@@ -165,7 +181,10 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         
         if "playingId" in data:
             if self.playlist_tmp:
-                self._media_title = self.playlist_tmp[data["playingId"]]
+                self._media_title = self.playlist_tmp[data["playingId"]].split('-')[-1]
+                self._currentsong = self._media_title
+                self._media_artist = self.playlist_tmp[data["playingId"]].split('-')[0]
+                
 
         if "playMode" in data:
             if data["playMode"] == 0:
@@ -207,7 +226,10 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
     def name(self):
         """Return the name of the device."""
         return self._name
-
+    @property
+    def media_artist(self):
+        """Return the artist of current playing media (Music track only)."""
+        return self._media_artist
     @property
     def state(self) -> MediaPlayerState:
         """Return the media state."""
@@ -396,7 +418,9 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
                 "id": int(media_id)
             }
             await self.exec_command(data)
-            self._media_title = self.playlist_tmp[int(media_id)]
+            self._media_title = self.playlist_tmp[int(media_id)].split('-')[-1]
+            self._media_artist = self.playlist_tmp[int(media_id)].split('-')[0]
+            self._currentsong = self._media_title
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute. Emulated with set_volume_level."""
         if mute:
@@ -482,6 +506,9 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             0,
             False
         )
+    def get_playlist(self):
+        self.hass.async_create_task(self.exec_command_playlist({}))
+        
     async def exec_command_playlist(self, data: dict):
 
         data["sn"] = self.unique_id
