@@ -35,7 +35,7 @@ async def _async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -
     #await mqtt_client.async_disconnect()
     hub.reconnect_flag = True
     hass.async_create_task(
-        hub.init(entry, False)
+        hub.init(entry, True)
     )
 
     
