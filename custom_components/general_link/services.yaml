@@ -1,5 +1,6 @@
 # 服务 ID
 custom_push_mqtt:
+  description: "自定义mqtt推送服务"
   # 服务接受的字段
   fields:
     # MQTT 主题
@@ -28,6 +29,7 @@ custom_push_mqtt:
           placeholder: "请输入 通知id 留空为 topic"
 log_query:
   # 服务接受的字段
+  description: "查询日志记录"
   fields:
     # 发送的数据
     place_id:
@@ -51,6 +53,13 @@ log_query:
         text:
           multiline: false
           placeholder: "每页显示位置"
+    place_id:
+      required: false
+      example: "-"
+      selector:
+        text:
+          multiline: false
+          placeholder: "请输入 JSON 格式的数据"
     n_id:
       required: false
       example: "-"
@@ -60,6 +69,7 @@ log_query:
           placeholder: "请输入 通知id 留空为 topic"
 
 get_backupconfig:
+  description: "获取备份配置"
   fields:
     # 备份配置名称
     name:
@@ -99,5 +109,4 @@ get_backupconfig:
       selector:
         text:
           multiline: false
-
           placeholder: "请输envKey"
