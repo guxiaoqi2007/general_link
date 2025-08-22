@@ -14,7 +14,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.components.mqtt.const import CONF_CERTIFICATE
 from .mdns import MdnsScanner
 from .const import MQTT_CLIENT_INSTANCE, CONF_LIGHT_DEVICE_TYPE, EVENT_ENTITY_REGISTER, MQTT_TOPIC_PREFIX, \
-    EVENT_ENTITY_STATE_UPDATE, DEVICE_COUNT_MAX,TEMP_MQTT_TOPIC_PREFIX
+    EVENT_ENTITY_STATE_UPDATE, DEVICE_COUNT_MAX,TEMP_MQTT_TOPIC_PREFIX,LOG_REPORT_Q8
 from .mqtt import MqttClient
 
 from homeassistant.helpers.storage import Store
@@ -207,6 +207,8 @@ class Gateway:
         self.media_player_sn = {}
 
         self.n_tmp = 10000
+
+        self._response_data={}
 
         """Lighting Control Type"""
         self.light_device_type = entry.data[CONF_LIGHT_DEVICE_TYPE]
@@ -420,7 +422,7 @@ class Gateway:
             string_array = ["sn", "workingTime", "powerSavings"]
             # 过滤不用查询的字段
             
-            string_filter = ["a109", "a15", "travel","relays","playState","playingId","playingTime","playingWholeTime"]
+            string_filter = ["a109", "a15", "travel","relays"]
 
             string_light_filter = ["on", "rgb", "level", "kelvin"]
 
@@ -432,7 +434,7 @@ class Gateway:
                 if any(key in state for key in string_light_filter):
                     flag = True
                     await self._exec_event_3(state)
-                    #_LOGGER.warning(f"event/3 data123:{state}")
+                    
 
                 elif any(key in state for key in string_filter):
                     await self._exec_event_3(state)
@@ -454,7 +456,7 @@ class Gateway:
                 }
                 await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q5", data, 3)
 
-            #_LOGGER.warning(f"event/3 data:{payload}")
+            
 
             if flag:
                 await self.sync_group_status(False)
@@ -462,26 +464,23 @@ class Gateway:
             _LOGGER.debug(f"event/4 data:{payload}")
 
         elif topic.endswith("report/q5") or topic.endswith("report/q7"):
-            _LOGGER.warning(f"report/q5:{payload}")
+            _LOGGER.debug(f"report/q5:{payload}")
             #payload["timestamp"] = timestamp.isoformat()
             message = json.dumps(payload,ensure_ascii=False,indent=4)
             await self.hass.services.async_call( "persistent_notification", "create", {"title":topic,"message": message,"notification_id": topic}, blocking=True)
         
         elif topic.endswith("report/q8"):
+            payload = self.log_data(payload)
             log_data = payload["data"].get("list")
             #_LOGGER.warning(f"！！！！report/q8:{log_data}")
-            for i in log_data:
+            for item in log_data:
              self.hass.bus.async_fire(
-             "report_q8",
-             {
-               "message": "日志上报",
-               "log": f"{i}"
-             }
+             LOG_REPORT_Q8,item
              )
 
         elif topic.endswith("event/5"):
             group_list = payload["data"]
-            _LOGGER.warning(f"event/5 data:{payload}")
+            _LOGGER.debug(f"event/5 data:{payload}")
             for group in group_list:
                 if 'a7' in group and 'a8' in group and 'a9' in group:
                     device_type = group['a7']
@@ -521,7 +520,6 @@ class Gateway:
         #    await self.sync_group_status(True)
         elif topic.endswith("p55"):
             reversed_dict = {value: key for key, value in self.media_player_sn.items()}
-            #_LOGGER.warning(f"p55 reversed_dict:{reversed_dict}")
             
             async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
@@ -580,7 +578,7 @@ class Gateway:
         """
 
     async def _exec_event_3(self, data):
-        _LOGGER.warning(f"exec_event_3  {data}")
+        _LOGGER.debug(f"exec_event_3  {data}")
         if "relays" in data:
             for relay, is_on in enumerate(data["relays"]):
                 status = {
@@ -645,6 +643,10 @@ class Gateway:
                 async_dispatcher_send(
                     self.hass, EVENT_ENTITY_STATE_UPDATE.format(
                         data["sn"]+"E"), data
+                )
+                async_dispatcher_send(
+                    self.hass, EVENT_ENTITY_STATE_UPDATE.format(
+                        data["sn"]+"P"), data
                 )
             else:
                 async_dispatcher_send(
@@ -896,7 +898,7 @@ class Gateway:
         return await self._async_mqtt_publish(topic, data,seq = n_id)
 
     async def mqtt_subscribe_custom(self, subscribe_topic) -> None:
-        await self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
+        self.unsubscribe_temp = await self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
             subscribe_topic,self._async_mqtt_subscribe_custom,0,"utf-8")
         #await self.reconnect(self._entry)
     
@@ -905,16 +907,12 @@ class Gateway:
             topic = msg.topic
             timestamp = msg.timestamp
             
-            
-            #_LOGGER.warning(f"msg,{msg}")
-
-
             if payload:
              try:
-                sns_tmp = []
-                data_p = {}
-                store = Store(self.hass, 1, f'test/model')
-                sns_tmp = await store.async_load()
+                
+                
+                store = Store(self.hass, 1, 'test/model')
+                sns_tmp = await store.async_load() or []
                 payload = json.loads(payload)
                 seq = payload["seq"]
                 if seq == 4 :
@@ -925,6 +923,7 @@ class Gateway:
                  data_all = payload["data"]["list"]
                  
                  for data_tmp in data_all:
+                   data_p = {}
                    data_p["name"] = data_tmp["name"]
                    data_p["sn"] = data_tmp["sn"]
                    data_p["model"] = data_tmp["model"]
@@ -947,9 +946,13 @@ class Gateway:
              _LOGGER.warning("JSON None")
              return
             #payload["timestamp"] = timestamp.isoformat()
+            self._response_data = payload
             message = json.dumps(payload,ensure_ascii=False,indent=4)
             await self.hass.services.async_call( "persistent_notification", "create", 
              {"title":topic,"message": message,"notification_id": seq}, blocking=True)
+            if self.unsubscribe_temp is not None:
+               self.unsubscribe_temp()
+               self.unsubscribe_temp = None
   
 
     async def _async_mqtt_publish(self, topic: str, data: object, seq=2):
@@ -966,6 +969,10 @@ class Gateway:
             0,
             False
         )
+    @property
+    def response_data(self):
+        return self._response_data
+
     def log_data(self,json_data):
   
     # 确保json_data是字典类型

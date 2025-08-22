@@ -28,6 +28,8 @@ MQTT_TOPIC_PREFIX = DOMAIN
 
 DEVICE_COUNT_MAX = 100
 
+LOG_REPORT_Q8= "report_q8"
+
 MDNS_SCAN_SERVICE = "_mqtt._tcp.local."
 
 TEMP_MQTT_TOPIC_PREFIX = "general_link_topic_prefix"

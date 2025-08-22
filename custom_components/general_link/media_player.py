@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import homeassistant.util.dt as dt_util
-from abc import ABC
 from typing import Any
 from homeassistant.components import media_source
 from homeassistant.components.media_player import MediaPlayerEntity, MediaType, MediaPlayerState, \
@@ -15,6 +14,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from urllib.parse import urlparse, parse_qs, parse_qsl, quote
+
 from homeassistant.components.media_player.const import (
     MEDIA_CLASS_ALBUM,
     MEDIA_CLASS_ARTIST,
@@ -47,19 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 
 COMPONENT = "media_player"
 
-CHILD_TYPE_MEDIA_CLASS = {
-    MEDIA_TYPE_SEASON: MEDIA_CLASS_SEASON,
-    MEDIA_TYPE_ALBUM: MEDIA_CLASS_ALBUM,
-    MEDIA_TYPE_MUSIC: MEDIA_CLASS_MUSIC,
-    MEDIA_TYPE_ARTIST: MEDIA_CLASS_ARTIST,
-    MEDIA_TYPE_MOVIE: MEDIA_CLASS_MOVIE,
-    MEDIA_TYPE_PLAYLIST: MEDIA_CLASS_PLAYLIST,
-    MEDIA_TYPE_TRACK: MEDIA_CLASS_TRACK,
-    MEDIA_TYPE_TVSHOW: MEDIA_CLASS_TV_SHOW,
-    MEDIA_TYPE_CHANNEL: MEDIA_CLASS_CHANNEL,
-    MEDIA_TYPE_EPISODE: MEDIA_CLASS_EPISODE,
-    
-}
+
 
 protocol = 'music://'
 class CloudMusicRouter():
@@ -92,7 +80,7 @@ async def async_setup_entry(
     config_entry.async_on_unload(unsub)
 
 
-class CustomMediaPlayer(MediaPlayerEntity, ABC):
+class CustomMediaPlayer(MediaPlayerEntity):
     """Representation of a MPD server."""
 
     _attr_media_content_type = MediaType.MUSIC
@@ -112,34 +100,35 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         self._shuffle = False
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
         self.num = config["num"]
-        self.playlist_tmp =[]
+        self.playlist =[]
         self._media_title = ""
         self._media_artist = None
         self._media_duration = None
         self._media_position = None
         self._media_position_updated_at = None
+        self._attr_available = True
         self._currentsong = self._media_title
-        
-
+        self._unsub = None
         self.update_state(config)
         
-
-        """Add a device state change event listener, and execute the specified method when the device state changes. 
-        Note: It is necessary to determine whether an event listener has been added here to avoid repeated additions."""
+    async def async_added_to_hass(self) -> None:
         key = EVENT_ENTITY_STATE_UPDATE.format(self.unique_id)
-        if key not in hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
-            unsub = async_dispatcher_connect(
-                hass, key, self.async_discover
+        if key not in self.hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT]:
+            self._unsub = async_dispatcher_connect(
+                self.hass, key, self.async_discover
             )
-            hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
-            config_entry.async_on_unload(unsub)
-        self.get_playlist()
+            self.hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = self._unsub 
+            self.async_on_remove(self._unsub)
+        await self.exec_command_playlist({})
+
     @callback
     def async_discover(self, data: dict) -> None:
         try:
+            
             self.update_state(data)
-        except Exception:
-            raise
+            self.async_write_ha_state()
+        except Exception as s:
+            _LOGGER.error("mp_Discovered %s", s)
     @property
     def device_info(self) -> DeviceInfo:
         """Information about this entity/device."""
@@ -152,10 +141,11 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             "manufacturer": MANUFACTURER,
         }
 
+
     def update_state(self, data):
         """Light event reporting changes the light state in HA"""
         if  "names" in data:
-            self.playlist_tmp = data.get("names", [])
+            self.playlist = data.get("names", [])
         
         if "playState" in data:
             if data["playState"] == 0:
@@ -165,6 +155,7 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
 
         if "volume" in data:
             self._volume = int(data["volume"] * 100)
+        
 
         if "silent" in data:
             if data["silent"] == 1:
@@ -180,10 +171,10 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             self._media_duration = data["playingWholeTime"]
         
         if "playingId" in data:
-            if self.playlist_tmp:
-                self._media_title = self.playlist_tmp[data["playingId"]].split('-')[-1]
+            if self.playlist:
+                self._media_title = self.playlist[data["playingId"]].split('-')[-1]
                 self._currentsong = self._media_title
-                self._media_artist = self.playlist_tmp[data["playingId"]].split('-')[0]
+                self._media_artist = self.playlist[data["playingId"]].split('-')[0]
                 
 
         if "playMode" in data:
@@ -199,6 +190,12 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             elif data["playMode"] == 3:
                 self._shuffle = True
                 self._repeat = RepeatMode.OFF
+
+        if "state" in data:
+            if data["state"] != 0:
+                self._attr_available = False
+            else:
+                self._attr_available = True
        
     @property
     def media_duration(self):
@@ -371,7 +368,7 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
             library_info.children.append(
                 BrowseMedia(
                     title=title,
-                    media_class=CHILD_TYPE_MEDIA_CLASS[media_content_type],
+                    media_class="playlist",
                     media_content_type=media_content_type,
                     media_content_id=media_content_id,
                     can_play=False,
@@ -393,8 +390,8 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
         )
 
         playlist = [] if hasattr(self, 'playlist') == False else self.playlist
-        if self.playlist_tmp is not []:
-            playlist = self.playlist_tmp 
+        if self.playlist is not []:
+            playlist = self.playlist 
         for index, title in enumerate(playlist):
             library_info.children.append(
                 BrowseMedia(
@@ -418,8 +415,8 @@ class CustomMediaPlayer(MediaPlayerEntity, ABC):
                 "id": int(media_id)
             }
             await self.exec_command(data)
-            self._media_title = self.playlist_tmp[int(media_id)].split('-')[-1]
-            self._media_artist = self.playlist_tmp[int(media_id)].split('-')[0]
+            self._media_title = self.playlist[int(media_id)].split('-')[-1]
+            self._media_artist = self.playlist[int(media_id)].split('-')[0]
             self._currentsong = self._media_title
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute. Emulated with set_volume_level."""

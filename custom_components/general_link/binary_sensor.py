@@ -32,7 +32,7 @@ async def async_setup_entry(
                    config_payload['unique_id'] = f"{unique_id}_{inputname}"
                    config_payload['name'] = f"{name}_{i}"
                    config_payload['inputname'] = inputname
-                   #_LOGGER.warning(f"A100传感器未实现{config_payload}")
+                   
                    async_add_entities([MotionA100Sensor(hass, config_payload, config_entry)])
 
         except Exception :
@@ -58,6 +58,7 @@ class MotionSensor(BinarySensorEntity):
         self.dname = config["name"]
         self.sn = config["sn"]
         self._model = config["model"]
+        self._attr_available = True
         self.hass = hass
         self.config_entry = config_entry
         self.update_state(config)
@@ -77,7 +78,12 @@ class MotionSensor(BinarySensorEntity):
             self.async_write_ha_state()
         except Exception as e:
             _LOGGER.error(f"更新传感器状态时出错: {e}")
-
+    def update_state(self, data) -> None:
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
     @property
     def device_info(self) -> DeviceInfo:
         """关于此实体/设备的信息"""
@@ -103,6 +109,7 @@ class MotionA15Sensor(MotionSensor):
 
     def update_state(self, data: dict):
         """传感器事件报告更改HA中的传感器状态"""
+        super().update_state(data)
         if "a15" in data:
             self._attr_is_on = bool(data["a15"])
 
@@ -120,6 +127,7 @@ class MotionA100Sensor(MotionSensor):
 
     def update_state(self, data: dict):
         """传感器事件报告更改HA中的传感器状态"""
+        super().update_state(data)
         if self._input in data:
             self._attr_is_on = bool(data[self._input])
 

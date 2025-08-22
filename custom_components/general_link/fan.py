@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import json
 import logging
+from typing import Any, Optional 
 from abc import ABC
 from homeassistant.components.fan import FanEntity,FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -58,6 +59,8 @@ class CustomFan(FanEntity, ABC):
 
     _attr_preset_mode = None
 
+    
+
     #_attr_speed_count = 3
 
 #    SPEED_RANGE = (1, 5)
@@ -76,6 +79,8 @@ class CustomFan(FanEntity, ABC):
         self.sn = config["sn"]
 
         self._model = config["model"]
+        
+        self._attr_available = True
 
         self.hass = hass
 
@@ -154,6 +159,12 @@ class CustomFan(FanEntity, ABC):
                 curr_a109 = int(data["a109"])
                 self._attr_a109 = curr_a109
 
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
+
     async def async_turn_on(self, speed: Optional[str] = None, percentage: Optional[int] = None, preset_mode: Optional[str] = None, **kwargs: Any) -> None:
         """Turn on the fan"""
         if self._attr_a109 != 3:
@@ -179,7 +190,7 @@ class CustomFan(FanEntity, ABC):
         self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        # _LOGGER.warning("set_fan_mode : %s", fan_mode)
+        
         fan_level = 0
         if preset_mode == "自动":
             fan_level = 0

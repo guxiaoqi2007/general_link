@@ -7,26 +7,23 @@ custom_push_mqtt:
     topic:
       required: false
       example: "P/0/center/q24"
+      description: "请输入 MQTT 主题"
       selector:
         text:
-          multiline: false
-          placeholder: "请输入 MQTT 主题"
-
     # 发送的数据
-    data:
+    payload:
       required: true
       example: "-"
+      description: "请输入 JSON 格式的数据"
       selector:
-        json:
-          multiline: false
-          placeholder: "请输入 JSON 格式的数据"
+        text:
     n_id:
       required: false
       example: "-"
+      description: "请输入 通知id 留空为 topic"
       selector:
-        text:
-          multiline: false
-          placeholder: "请输入 通知id 留空为 topic"
+        text:  
+        
 log_query:
   # 服务接受的字段
   description: "查询日志记录"
@@ -35,38 +32,27 @@ log_query:
     place_id:
       required: true
       example: "-"
+      description: "输入场所id"
       selector:
-        text:
-          multiline: false
-          placeholder: "输入场所id"
+        text: 
     start:
       required: false
       example: "-"
+      description: "开始位置"
       selector:
-        text:
-          multiline: false
-          placeholder: "开始位置"
+        text:  
     max:
       required: false
       example: "-"
+      description: "每页显示位置"
       selector:
-        text:
-          multiline: false
-          placeholder: "每页显示位置"
-    place_id:
-      required: false
-      example: "-"
-      selector:
-        text:
-          multiline: false
-          placeholder: "请输入 JSON 格式的数据"
+        text:    
     n_id:
       required: false
       example: "-"
+      description: "请输入 通知id 留空为 topic"
       selector:
         text:
-          multiline: false
-          placeholder: "请输入 通知id 留空为 topic"
 
 get_backupconfig:
   description: "获取备份配置"
@@ -75,38 +61,32 @@ get_backupconfig:
     name:
       required: true
       example: "username"
+      description: "请输入用户"
       selector:
         text:
-          multiline: false
-          placeholder: "请输入用户"
-
     password:
       required: true
       example: "123456"
+      description: "请输入密码"
       selector:
-        text:
-          multiline: false
-          placeholder: "请输入密码"
+        text: 
     url:
       required: False
       example: "xxx.xxx.xxx.com"
+      description: "请输入url"
       selector:
         text:
-          multiline: false
-          placeholder: "请输入url"
-
     manufacturer:
        required: False
        example: "Xxxxx"
+       description: "请输入厂商"
        selector:
          text:
-           multiline: false
-           placeholder: "请输入厂商"
-    
     envKey:
       required: true
       example: "123456"
+      description: "请输envKey"
       selector:
         text:
-          multiline: false
-          placeholder: "请输envKey"
+          
+          

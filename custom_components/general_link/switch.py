@@ -11,6 +11,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+
 from .const import DOMAIN, MQTT_CLIENT_INSTANCE, \
     EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE, CACHE_ENTITY_STATE_UPDATE_KEY_DICT, MANUFACTURER
 
@@ -88,6 +89,8 @@ class CustomSwitch(SwitchEntity, ABC):
 
         self.config_entry = config_entry
 
+        self._attr_available = True
+
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
@@ -134,6 +137,11 @@ class CustomSwitch(SwitchEntity, ABC):
                 self._state = False
             else:
                 self._state = True
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+               self._attr_available = False
 
     async def async_turn_on(self, **kwargs):
         """Turn on the switch"""
@@ -199,6 +207,8 @@ class CustomSwitchA41(SwitchEntity, ABC):
 
         self.config_entry = config_entry
 
+        self._attr_available = True
+
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
@@ -245,6 +255,11 @@ class CustomSwitchA41(SwitchEntity, ABC):
                 self._state = False
             else:
                 self._state = True
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
 
     async def async_turn_on(self, **kwargs):
         """Turn on the switch"""
@@ -310,6 +325,8 @@ class CustomSwitchA121(SwitchEntity, ABC):
 
         #self.relay = config["relay"]
 
+        self._attr_available = True
+
         self.config_entry = config_entry
 
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
@@ -357,6 +374,12 @@ class CustomSwitchA121(SwitchEntity, ABC):
                 self._state = False
             else:
                 self._state = True
+
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
 
     async def async_turn_on(self, **kwargs):
         """Turn on the switch"""

@@ -105,6 +105,8 @@ class CustomClimate(ClimateEntity, ABC):
         
         self._attr_device_class = COMPONENT
 
+        self._attr_available = True
+
         self.hass = hass
 
         self.config_entry = config_entry
@@ -150,6 +152,12 @@ class CustomClimate(ClimateEntity, ABC):
             self.on_off_cache = int(data["a64"])
             if on_off == 0:
                 self._attr_hvac_mode = HVACMode.OFF
+        
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
 
         if self.on_off_cache == 1:
             if "a66" in data:
@@ -321,6 +329,8 @@ class CustomClimateH(ClimateEntity, ABC):
 
         self.config_entry = config_entry
 
+        self._attr_available = True
+
         self.a109 = config["a109"]
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
@@ -356,6 +366,12 @@ class CustomClimateH(ClimateEntity, ABC):
 
     def update_state(self, data):
         #_LOGGER.warning("update_stateh : %s", data)
+
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
 
         if "a113" in data:
             on_off = int(data["a113"])
@@ -454,6 +470,12 @@ class CustomClimateW(CustomClimate):
             self.on_off_cache = int(data["a64"])
             if on_off == 0:
                 self._attr_hvac_mode = HVACMode.OFF
+                
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
 
         if self.on_off_cache == 1:
             if "a66" in data:

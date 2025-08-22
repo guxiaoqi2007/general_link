@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     """设置事件实体"""
-    _LOGGER.warning("设置事件实体")
+    
     async_add_entities([MyCustomEventEntity(hass)])
     
 
@@ -48,7 +48,7 @@ class MyCustomEventEntity(EventEntity):
     @callback
     def handle_event(self, event: Event):
         """处理接收到的事件"""
-        _LOGGER.warning(f"接收到了事件 {event.event_type}，数据：{event.data}")
+        _LOGGER.debug(f"接收到了事件 {event.event_type}，数据：{event.data}")
         # 在这里可以根据事件的内容执行相应的操作
         # 例如：更新状态、发送通知等
         self._attr_state = STATE_ON  # 更新实体状态
@@ -60,4 +60,4 @@ class MyCustomEventEntity(EventEntity):
 
     def perform_additional_actions(self):
         """在此方法中实现额外的动作"""
-        _LOGGER.warning("执行额外的操作...")
+        _LOGGER.debug("执行额外的操作...")

@@ -102,7 +102,7 @@ class RebootButton(ButtonEntity,ABC):
             0,
             False
         )
-        _LOGGER.warning(f"按钮 {message} 被按下")
+        
 
 
             # "usr": "34943",

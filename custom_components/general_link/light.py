@@ -26,7 +26,7 @@ LIGHT_MAX_KELVIN = 370
 
 LIGHT_MHT_MIN_KELVIN = 2700
 
-LIGHT_MHT_MAX_KELVIN = 6500
+LIGHT_MHT_MAX_KELVIN = 6300
 
 
 async def async_setup_entry(
@@ -71,9 +71,9 @@ class CustomLight(LightEntity):
 
         self._name = config["name"]
 
-        self._attr_max_mireds = LIGHT_MAX_KELVIN
+        self._attr_min_color_temp_kelvin = LIGHT_MHT_MIN_KELVIN
 
-        self._attr_min_mireds = LIGHT_MIN_KELVIN
+        self._attr_max_color_temp_kelvin = LIGHT_MHT_MAX_KELVIN
 
         self.on_off = False
 
@@ -86,7 +86,7 @@ class CustomLight(LightEntity):
 
         self._attr_supported_color_modes: set[ColorMode] = set()
 
-        self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
+        #self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
 
         self._attr_supported_color_modes.add(ColorMode.COLOR_TEMP)
 
@@ -111,6 +111,8 @@ class CustomLight(LightEntity):
                 self._attr_color_mode = ColorMode.RGB
 
         self.hass = hass
+
+        
 
         self.config_entry = config_entry
 
@@ -178,11 +180,14 @@ class CustomLight(LightEntity):
                 self._attr_available = True
             else:
                 self._attr_available = False
+                
         if "on" in data:
             if data["on"] == 0:
                 self.on_off = False
             else:
                 self.on_off = True
+        
+        
 
         if "kelvin" in data:
             kelvin = int(data["kelvin"])

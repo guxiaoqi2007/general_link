@@ -85,6 +85,8 @@ class CustomCover(CoverEntity):
 
         self._current_position = 100
 
+        self._attr_available = True
+
         self.hass = hass
 
         self.config_entry = config_entry
@@ -104,6 +106,8 @@ class CustomCover(CoverEntity):
             )
             hass.data[CACHE_ENTITY_STATE_UPDATE_KEY_DICT][key] = unsub
             config_entry.async_on_unload(unsub)
+    async def async_added_to_hass(self) -> None:
+        pass
 
     @callback
     def async_discover(self, data: dict) -> None:
@@ -160,6 +164,13 @@ class CustomCover(CoverEntity):
             position = int(data["travel"] * 100)
             self._target_position = position
             self._current_position = self._target_position
+        
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
+        
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
@@ -241,6 +252,12 @@ class CustomCoverA(CustomCover):
             position = int(data["a108"] * 100)
             self._target_tilt_position = position
             self._current_tilt_position = self._target_tilt_position
+
+        if "state" in data:
+            if data["state"] == 1:
+                self._attr_available = True
+            elif data["state"] == 0:
+                self._attr_available = False
     
     @property
     def current_cover_tilt_position(self):

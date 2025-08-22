@@ -6,14 +6,14 @@ import json
 from homeassistant.const import __version__
 from homeassistant.components import network
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant,ServiceResponse, SupportsResponse,ServiceCall
 from homeassistant.const import CONF_NAME, CONF_PASSWORD, CONF_ADDRESS
 from homeassistant.helpers import config_validation as cv, entity_platform, service
 from ipaddress import ip_network
 from .listener import sender_receiver
 from .Gateway import Gateway
 from .const import PLATFORMS, MQTT_CLIENT_INSTANCE, CONF_LIGHT_DEVICE_TYPE, DOMAIN, FLAG_IS_INITIALIZED, \
-    CACHE_ENTITY_STATE_UPDATE_KEY_DICT, CONF_BROKER, CONF_ENVKEY, CONF_PLACE,MQTT_TOPIC_PREFIX,TEMP_MQTT_TOPIC_PREFIX
+    CACHE_ENTITY_STATE_UPDATE_KEY_DICT, CONF_BROKER, CONF_ENVKEY, CONF_PLACE,MQTT_TOPIC_PREFIX,TEMP_MQTT_TOPIC_PREFIX,LOG_REPORT_Q8
 from .mdns import MdnsScanner
 from .http_get import HttpRequest
 
@@ -30,7 +30,7 @@ async def _async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -
     """
     _LOGGER.debug(f"_async_config_entry_updated {entry.data}")
     
-    hub = hass.data[DOMAIN][entry.entry_id]
+    hub : Gateway= hass.data[DOMAIN][entry.entry_id]
     mqtt_client = hass.data[MQTT_CLIENT_INSTANCE]
     #await mqtt_client.async_disconnect()
     hub.reconnect_flag = True
@@ -78,113 +78,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     
     
-    _LOGGER.warning(f"entry.data ,{entry.data}")
-    # hub.init_state = True
-
-    _LOGGER.warning(f"homeassistant.version ,{__version__}")
-    
-    async def custom_push_mqtt(call):
-
-        topic = call.data.get("topic", "P/0/center/q24")
-        data = call.data.get("data")
-        n_id = call.data.get("n_id")
-        sns = call.data.get("sns")
-        sns1 = call.data.get("sns1")
-        global temp_ll
-        #subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{topic.split('/')[1]}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
-        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
-        
-        if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
-           await hub.mqtt_subscribe_custom(subscribe_topic)
-           hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
-        
-       
-        
-        
-        if sns is not None:
-            for sn in sns:
-             #休眠1s
-             await asyncio.sleep(1)
-             data["sn"] = sn
-             await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
-        elif sns1 is not None:
-            for sn in sns1:
-             #休眠1s
-             await asyncio.sleep(1)
-             data["sns"] = [sn]
-             await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
-        else :
-            await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
-
-        # hass.states.set(f"{DOMAIN}.PUSH", payload)
-
-        return True
-
-    hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt)
-
-    async def log_query(call):
-        place_id = call.data.get("place_id")
-        topic = f"P/{place_id}/center/q86"
-        n_id = call.data.get("n_id")
-        start = call.data.get("start",0)
-        time_start = call.data.get("time_start")
-        time_end = call.data.get("time_end")
-        max = call.data.get("max",128)
-        global temp_ll
-        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
-        data_dicp={ "start":int(start), "time_start":time_start, "time_end":time_end, "max":int(max)}
-        
-        if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
-           await hub.mqtt_subscribe_custom(subscribe_topic)
-           hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
-        _LOGGER.warning(f"topic,{hass.data[TEMP_MQTT_TOPIC_PREFIX]}")
-        
-        if n_id is not  None:
-            n_id = int(n_id)
-
-        await hub.async_mqtt_publish(topic, data_dicp,n_id = n_id)
-
-        return True
-
-    hass.services.async_register(DOMAIN, "log_query", log_query)
-
-
     
 
-    async def get_backupconfig(call):
-        name = call.data.get("name")
-        password = call.data.get("password")
-        url = call.data.get("url","api.iot.9451.com.cn")
-        manufacturer = call.data.get("manufacturer", "Netmoon")
-        envKey = call.data.get("envKey","123456")
-        hr= HttpRequest(hass, name, password, url, manufacturer)
-        await hr.start()
-        response = await hr.get_envkey()
-
-        message = json.dumps(response,ensure_ascii=False,indent=4)
-        
-        await hass.services.async_call(
-
-        "persistent_notification", "create", {"title":"场所信息","message": message,"notification_id": 1}, blocking=True
-
-        )
-        responsebackup = await hr.get_backupfile(envKey)
-
-        message = json.dumps(responsebackup,ensure_ascii=False,indent=4)
-        await hass.services.async_call(
-
-        "persistent_notification", "create", {"title":"备份信息","message": message,"notification_id": 2}, blocking=True
-
-        )
-        return True
-    hass.services.async_register(DOMAIN, "get_backupconfig", get_backupconfig)
+    
+    
+    #添加服务
+    await _async_add_services(hass,hub)
 
 
     def handle_event(event):
         pass
 
     # Listen for when example_component_my_cool_event is fired
-    hass.bus.async_listen("report_q8", handle_event)
+    hass.bus.async_listen(LOG_REPORT_Q8, handle_event)
 
     hass.async_create_task(
         hub.init(entry, True)
@@ -203,6 +109,112 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     return True
 
+async def _async_add_services(hass: HomeAssistant,hub: Gateway):
+
+    async def custom_push_mqtt(call) -> ServiceResponse:
+
+        topic = call.data.get("topic", "P/0/center/q24")
+        data = call.data.get("payload")
+        n_id = call.data.get("n_id")
+        sns = call.data.get("sns")
+        sns1 = call.data.get("sns1")
+        
+        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{topic.split('/')[1]}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        #subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        
+        #if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
+        await hub.mqtt_subscribe_custom(subscribe_topic)
+           #hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
+    
+        if sns is not None:
+            for sn in sns:
+             #休眠1s
+             await asyncio.sleep(1)
+             data["sn"] = sn
+             await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
+        elif sns1 is not None:
+            for sn in sns1:
+             #休眠1s
+             await asyncio.sleep(1)
+             data["sns"] = [sn]
+             await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
+        else :
+            await hub.async_mqtt_publish(topic, data, n_id = int(n_id))
+
+        # hass.states.set(f"{DOMAIN}.PUSH", payload)
+        await asyncio.sleep(2)
+        return hub._response_data
+
+    hass.services.async_register(DOMAIN, "custom_push_mqtt", custom_push_mqtt,supports_response=SupportsResponse.ONLY)
+
+    async def log_query(call):
+        place_id = call.data.get("place_id")
+        topic = f"P/{place_id}/center/q86"
+        n_id = call.data.get("n_id")
+        start = call.data.get("start",0)
+        time_start = call.data.get("time_start")
+        time_end = call.data.get("time_end")
+        max = call.data.get("max",128)
+        subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{topic.split('/')[1]}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        #subscribe_topic = f"{MQTT_TOPIC_PREFIX}/{entry.data['mqttAddr']}/{'/'.join(topic.split('/')[-2:]).replace('q', 'p')}"
+        data_dicp={ "start":int(start), "time_start":time_start, "time_end":time_end, "max":int(max)}
+        
+        #if subscribe_topic not in hass.data[TEMP_MQTT_TOPIC_PREFIX]:
+        await hub.mqtt_subscribe_custom(subscribe_topic)
+        #hass.data[TEMP_MQTT_TOPIC_PREFIX][subscribe_topic] = True
+        
+        
+        if n_id is not  None:
+            n_id = int(n_id)
+
+        await hub.async_mqtt_publish(topic, data_dicp,n_id = n_id)
+
+        return True
+
+    hass.services.async_register(DOMAIN, "log_query", log_query)
+
+
+    
+
+    async def get_backupconfig(call) -> ServiceResponse :
+        name = call.data.get("name")
+        password = call.data.get("password")
+        url = call.data.get("url","api.iot.9451.com.cn")
+        manufacturer = call.data.get("manufacturer", "Netmoon")
+        envKey = call.data.get("envKey","123456")
+        hr= HttpRequest(hass, name, password, url, manufacturer)
+        await hr.start()
+        response = await hr.get_envkey()
+        if response:
+            responsebackup = await hr.get_backupfile(envKey)
+            
+            if responsebackup["data"]:
+                return responsebackup
+            else:
+                return response
+            
+            
+        else:
+            return response
+        """
+        message = json.dumps(response,ensure_ascii=False,indent=4)
+        
+        await hass.services.async_call(
+
+        "persistent_notification", "create", {"title":"场所信息","message": message,"notification_id": 1}, blocking=True
+
+        )
+        
+
+        message = json.dumps(responsebackup,ensure_ascii=False,indent=4)
+        await hass.services.async_call(
+
+        "persistent_notification", "create", {"title":"备份信息","message": message,"notification_id": 2}, blocking=True
+
+        )
+        return True
+        """
+    hass.services.async_register(DOMAIN, "get_backupconfig", get_backupconfig,supports_response=SupportsResponse.ONLY)
 
 async def monitor_connection(hass:HomeAssistant, hub:Gateway,entry:ConfigEntry):
     """监控连接的异步函数。
@@ -226,7 +238,7 @@ async def monitor_connection(hass:HomeAssistant, hub:Gateway,entry:ConfigEntry):
 
         await asyncio.sleep(10)  # 每20秒检测一次连接状态
         
-        _LOGGER.warning(f"第 ,{num}")
+        
         num = num + 1
 
         try:
@@ -253,8 +265,8 @@ async def monitor_connection(hass:HomeAssistant, hub:Gateway,entry:ConfigEntry):
                 else:
                     connection = await scanner.scan_single(entry.data[CONF_NAME], 2)
 
-                _LOGGER.warning("mqtt 连接不上了，需要重新扫描一下，得到连接 %s", connection)
-                #_LOGGER.warning("mqtt 连接不上了，重新扫描一下")
+                #_LOGGER.warning("mqtt 连接不上了，需要重新扫描一下，得到连接 %s", connection)
+                _LOGGER.warning("mqtt 连接不上了，重新扫描一下")
 
                 
 
@@ -293,14 +305,14 @@ async def monitor_connection(hass:HomeAssistant, hub:Gateway,entry:ConfigEntry):
                 await hub.sync_group_status(False)
     
         except asyncio.CancelledError:
-         _LOGGER.warning("monitor_connection 任务被 Home Assistant 取消。")
+         _LOGGER.error("monitor_connection 任务被 Home Assistant 取消。")
          # 清理工作
          raise
         except Exception as e:
 
             _LOGGER.error("Error in monitor_connection: %s", e)
 
-        await asyncio.sleep(20)
+        await asyncio.sleep(10)
 
         
 
