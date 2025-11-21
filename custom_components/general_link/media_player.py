@@ -15,29 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from urllib.parse import urlparse, parse_qs, parse_qsl, quote
 
-from homeassistant.components.media_player.const import (
-    MEDIA_CLASS_ALBUM,
-    MEDIA_CLASS_ARTIST,
-    MEDIA_CLASS_CHANNEL,
-    MEDIA_CLASS_DIRECTORY,
-    MEDIA_CLASS_EPISODE,
-    MEDIA_CLASS_MOVIE,
-    MEDIA_CLASS_MUSIC,
-    MEDIA_CLASS_PLAYLIST,
-    MEDIA_CLASS_SEASON,
-    MEDIA_CLASS_TRACK,
-    MEDIA_CLASS_TV_SHOW,
-    MEDIA_TYPE_ALBUM,
-    MEDIA_TYPE_ARTIST,
-    MEDIA_TYPE_CHANNEL,
-    MEDIA_TYPE_EPISODE,
-    MEDIA_TYPE_MUSIC,
-    MEDIA_TYPE_MOVIE,
-    MEDIA_TYPE_PLAYLIST,
-    MEDIA_TYPE_SEASON,
-    MEDIA_TYPE_TRACK,
-    MEDIA_TYPE_TVSHOW,
-)
+from homeassistant.components.media_player.const import MediaType
 
 from .const import MQTT_CLIENT_INSTANCE, MANUFACTURER,\
     EVENT_ENTITY_REGISTER, EVENT_ENTITY_STATE_UPDATE,\
@@ -344,13 +322,13 @@ class CustomMediaPlayer(MediaPlayerEntity):
             {
                 'title': '播放列表',
                 'path': CloudMusicRouter.local_playlist,
-                'type': MEDIA_TYPE_PLAYLIST
+                'type': MediaType.PLAYLIST
             }
         ]
         library_info = BrowseMedia(
             media_class=MEDIA_CLASS_DIRECTORY,
             media_content_id=protocol,
-            media_content_type=MEDIA_TYPE_CHANNEL,
+            media_content_type=MediaType.CHANNEL,
             title="本地音乐",
             can_play=False,
             can_expand=True,
@@ -382,7 +360,7 @@ class CustomMediaPlayer(MediaPlayerEntity):
         library_info = BrowseMedia(
             media_class=MEDIA_CLASS_DIRECTORY,
             media_content_id=media_content_id,
-            media_content_type=MEDIA_TYPE_PLAYLIST,
+            media_content_type=MediaType.PLAYLIST,
             title="播放列表",
             can_play=False,
             can_expand=False,
@@ -397,7 +375,7 @@ class CustomMediaPlayer(MediaPlayerEntity):
                 BrowseMedia(
                     title=title,
                     media_class=MEDIA_CLASS_MUSIC,
-                    media_content_type="MEDIA_TYPE_PLAYLIST",
+                    media_content_type="MediaType.PLAYLIST",
                     media_content_id=str(index),
                     can_play=True,
                     can_expand=False,
