@@ -59,6 +59,12 @@ class CustomScene(Scene):
 
         self.room_name = config["room_name"]+"-场景"
 
+        self._attr_extra_state_attributes = {
+
+                "scene_id": self.id,
+                
+            }
+
         self.hass = hass
 
         self.config_entry = config_entry

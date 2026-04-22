@@ -74,14 +74,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 启用重连标志
     hub.reconnect_flag = True
 
-    
-
-    
-    
-    
-
-    
-    
     #添加服务
     await _async_add_services(hass,hub)
 

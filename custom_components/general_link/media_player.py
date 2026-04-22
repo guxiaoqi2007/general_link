@@ -6,7 +6,7 @@ import logging
 import homeassistant.util.dt as dt_util
 from typing import Any
 from homeassistant.components import media_source
-from homeassistant.components.media_player import MediaPlayerEntity, MediaType, MediaPlayerState, \
+from homeassistant.components.media_player import MediaPlayerEntity, MediaType,MediaClass, MediaPlayerState, \
     MediaPlayerEntityFeature, RepeatMode,BrowseMedia
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
@@ -326,7 +326,7 @@ class CustomMediaPlayer(MediaPlayerEntity):
             }
         ]
         library_info = BrowseMedia(
-            media_class=MEDIA_CLASS_DIRECTORY,
+            media_class=MediaClass.DIRECTORY,
             media_content_id=protocol,
             media_content_type=MediaType.CHANNEL,
             title="本地音乐",
@@ -358,7 +358,7 @@ class CustomMediaPlayer(MediaPlayerEntity):
        if media_content_id.startswith(CloudMusicRouter.local_playlist):
         # 本地播放列表
         library_info = BrowseMedia(
-            media_class=MEDIA_CLASS_DIRECTORY,
+            media_class=MediaClass.DIRECTORY,
             media_content_id=media_content_id,
             media_content_type=MediaType.PLAYLIST,
             title="播放列表",
@@ -374,7 +374,7 @@ class CustomMediaPlayer(MediaPlayerEntity):
             library_info.children.append(
                 BrowseMedia(
                     title=title,
-                    media_class=MEDIA_CLASS_MUSIC,
+                    media_class=MediaClass.MUSIC,
                     media_content_type="MediaType.PLAYLIST",
                     media_content_id=str(index),
                     can_play=True,

@@ -46,4 +46,25 @@ PLATFORMS: list[str] = [
     "media_player",
     "event",
     "button",
+    "number",
 ]
+DEVICE_TYPES =  {
+    1: "Light",
+    2: "Switch",
+    3: "Curtain",
+    4: "Gateway",
+    5: "BackgroundMusic",
+    6: "SerialController",          # 或 "SerialDevice"；"Serializer" 在此上下文中不太准确
+    7: "Sensor",
+    8: "Repeater",
+    9: "ThermostatPanel",
+    10: "CentralACGateway",
+    11: "CentralAC",
+    12: "RFGateway",
+    13: "RFRemote",
+    14: "UniversalIRRemote",
+    15: "DimmerKnob",
+    16: "DryContact",
+    17: "HomeTheater"
+
+}

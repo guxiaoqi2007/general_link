@@ -68,7 +68,7 @@ class CustomFan(FanEntity, ABC):
     def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
         self._attr_unique_id = config["unique_id"]+"F"
 
-        self._attr_name = config["name"]+"新风"
+        self._attr_name = config["name"]+"_新风"
 
         self.dname = config["name"]
 

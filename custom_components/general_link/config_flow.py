@@ -7,6 +7,12 @@ import re
 import voluptuous as vol
 
 from homeassistant.helpers.selector import selector
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    SelectOptionDict,
+)
 from homeassistant.core import callback
 from homeassistant import config_entries, exceptions
 from homeassistant.components import zeroconf
@@ -113,22 +119,42 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            if user_input[CONF_LIGHT_DEVICE_TYPE] == "单灯":
+            if user_input[CONF_LIGHT_DEVICE_TYPE] == "single_light":
                 light_device_type = "single"
             else:
                 light_device_type = "group"
-            if user_input["scanmode"] == "手动":
+            if user_input["scanmode"] == "manual":
                 return await self.async_step_envkey()
-            elif user_input["scanmode"] == "自动":
+            elif user_input["scanmode"] == "automatic":
                 return await self.async_step_scan()
-            elif user_input["scanmode"] == "云端":
+            elif user_input["scanmode"] == "cloud":
                 return await self.async_step_cloud()
 
-        fields = OrderedDict()
-        fields[vol.Required(CONF_LIGHT_DEVICE_TYPE, default="灯组")] = vol.In(
-            ["单灯", "灯组"])
-        fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动" ,"云端"])
-        #fields[vol.Required("scanmode", default="自动")] = vol.In(["自动", "手动"])
+        fields = {
+        vol.Required(
+            "light_device_type", default="group_of_lights"
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    "single_light", "group_of_lights"
+                ],
+                translation_key="light_device_type_t",
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        ),
+        vol.Required(
+            "scanmode", default="automatic"
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    "automatic", "manual", "cloud"
+                ],
+                translation_key = "scanmode_t",
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
+        }
+        #fields[vol.Required("scanmode", default="automatic")] = vol.In(["automatic", "manual"])
         return self.async_show_form(
             step_id="option",
             data_schema=vol.Schema(fields),
@@ -390,7 +416,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry):
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
@@ -403,7 +429,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def async_step_user(self, user_input=None):
-        options = self.config_entry.options
+        options = self._config_entry.options
         errors = {}
         if user_input is not None:
             return self.async_create_entry(title='', data=user_input)

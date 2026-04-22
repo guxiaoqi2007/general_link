@@ -251,6 +251,7 @@ class NetmoonMusicClient:
         mode: int = None,
         seek: int = None,
         vol: int = None,
+        url: str = None,
     ):
         """SD卡模式下操作指令"""
         payload = {"action": action}
@@ -264,6 +265,8 @@ class NetmoonMusicClient:
             payload["seek"] = seek
         if vol is not None:
             payload["vol"] = vol
+        if url is not None:
+            payload["url"] = url
         return await self._make_authenticated_request("POST", "sd_card_cmd", payload)
 
     async def get_sd_card_state(self):

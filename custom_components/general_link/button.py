@@ -103,7 +103,3 @@ class RebootButton(ButtonEntity,ABC):
             False
         )
         
-
-
-            # "usr": "34943",
-           # "rspTo": "A/1234",

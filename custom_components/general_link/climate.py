@@ -331,7 +331,7 @@ class CustomClimateH(ClimateEntity, ABC):
 
         self._attr_available = True
 
-        self.a109 = config["a109"]
+        self.a109 = config.get("a109",0)
         self.mqttAddr = config_entry.data.get("mqttAddr",0)
 
         self.update_state(config)
@@ -461,7 +461,7 @@ class CustomClimateW(CustomClimate):
     def __init__(self, hass: HomeAssistant, config: dict, config_entry: ConfigEntry) -> None:
         super().__init__(hass, config , config_entry)
 
-        self._attr_a109 = config["a109"]
+        self._attr_a109 = config.get("a109",0)
 
     def update_state(self, data):
         #_LOGGER.warning("update_statesj : %s", data)
