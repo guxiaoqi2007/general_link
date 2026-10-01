@@ -1,39 +1,88 @@
+"""MQTT client based on paho.mqtt 2.0.
+
+剥离了 homeassistant.components.mqtt 内部依赖（Subscription / _matcher_for_topic /
+TIMEOUT_ACK / ReceiveMessage 等，HA 升级时经常变动导致不兼容的部分），
+改用本地定义 + paho 原生能力；事件循环调度仍通过 hass（HA 核心公共 API）完成。
+"""
+
 import asyncio
 import logging
 import random
 import ssl
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
-from typing import Any, Iterable, Callable
-from .util import version_compare
+from itertools import groupby
+from operator import attrgetter
+from typing import Any, Callable, Iterable
 
-#用来对比当前版本是否比2024.5.0低的
-VERSION_FLAG = version_compare("2024.5.0")
-
-
-from homeassistant.components.mqtt import PublishPayloadType, ReceiveMessage, CONF_KEEPALIVE, \
-    MQTT_CONNECTION_STATE
-
-from homeassistant.components.mqtt.client import TIMEOUT_ACK, SubscribePayloadType, Subscription, \
-    _matcher_for_topic
-
-from homeassistant.components.mqtt.models import  MessageCallbackType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PORT, CONF_USERNAME, CONF_PASSWORD
-from homeassistant.components.mqtt.const import CONF_CERTIFICATE
-from homeassistant.core import HomeAssistant, callback, HassJob
+from homeassistant.core import HomeAssistant, HassJob, callback
 from homeassistant.exceptions import HomeAssistantError
-from operator import attrgetter
-from itertools import groupby
 from homeassistant.helpers.dispatcher import dispatcher_send
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 from paho.mqtt import client
-from paho.mqtt.client import MQTTMessage
+from paho.mqtt.client import MQTTMatcher, MQTTMessage
 
 from .const import CONF_BROKER
 
 _LOGGER = logging.getLogger(__name__)
+
+# 替代 homeassistant.components.mqtt 内部常量
+CONF_KEEPALIVE = "keepalive"
+CONF_CERTIFICATE = "certificate"
+MQTT_CONNECTION_STATE = "mqtt_connection_state"
+TIMEOUT_ACK = 10
+
+PublishPayloadType = str | bytes | int | float | None
+SubscribePayloadType = str | bytes | int | float | None
+ReceivePayloadType = str | bytes | int | float | None
+MessageCallbackType = Callable[[Any], Any]
+
+
+@dataclass
+class ReceiveMessage:
+    """替代 homeassistant.components.mqtt.models.ReceiveMessage。"""
+
+    topic: str
+    payload: ReceivePayloadType
+    qos: int
+    retain: bool
+    subscribed_topic: str
+    timestamp: datetime | None = None
+
+
+@dataclass
+class Subscription:
+    """替代 homeassistant.components.mqtt.client.Subscription。"""
+
+    topic: str
+    is_simple_match: bool
+    complex_matcher: Callable[[str], bool]
+    job: HassJob
+    qos: int
+    encoding: str | None = None
+    subscription_id: int | None = None
+
+
+@lru_cache(2048)
+def _matcher_for_topic(subscription: str) -> Callable[[str], bool]:
+    """替代 homeassistant.components.mqtt.client._matcher_for_topic（paho 2.0）。"""
+    if "+" not in subscription and "#" not in subscription:
+        return lambda topic: subscription == topic
+    try:
+        matcher = MQTTMatcher()
+        matcher[subscription] = True
+        if hasattr(matcher, "iter_match"):
+            return lambda topic: next(matcher.iter_match(topic), None) is not None
+        return matcher.match
+    except Exception:
+        _LOGGER.warning("Can't create topic matcher for '%s'", subscription)
+        return lambda topic: False
+
 
 def _raise_on_error(result_code: int) -> None:
     """Raise error if error result."""
@@ -65,8 +114,10 @@ class MqttClient:
             config_entry: ConfigEntry,
             conf: ConfigType,
     ) -> None:
-        self._client = client.Client(client_id=f'python-mqtt-{random.randint(0, 1000)}')
-        #self._client = client.Client(f'{random.randint(10000, 20000)}')
+        self._client = client.Client(
+            callback_api_version=client.CallbackAPIVersion.VERSION1,
+            client_id=f'python-mqtt-{random.randint(0, 1000)}',
+        )
         self.hass = hass
         self.config_entry = config_entry
         self.conf = conf
@@ -80,7 +131,7 @@ class MqttClient:
         self._pending_operations_condition = asyncio.Condition()
         self._client.username_pw_set(self._username, password=self._password)
         if CONF_CERTIFICATE in conf:
-            self._client.tls_set(ca_certs=conf[CONF_CERTIFICATE],cert_reqs=ssl.CERT_NONE)
+            self._client.tls_set(ca_certs=conf[CONF_CERTIFICATE], cert_reqs=ssl.CERT_NONE)
         self._paho_lock = asyncio.Lock()
 
     def init_client(self) -> None:
@@ -98,9 +149,6 @@ class MqttClient:
         self._username = self.conf[CONF_USERNAME]
         self._password = self.conf[CONF_PASSWORD]
         self._client.username_pw_set(self._username, password=self._password)
-        #if CONF_CERTIFICATE in self.conf:
-           # self._client.tls_set(ca_certs=self.conf[CONF_CERTIFICATE],cert_reqs=ssl.CERT_NONE)
-        #result: int | None = None
         result = None
         try:
             result = await self.hass.async_add_executor_job(
@@ -143,7 +191,6 @@ class MqttClient:
     def _mqtt_on_connect(
             self, _mqttc: client, _userdata: None, _flags: dict[str, Any], result_code: int
     ) -> None:
-        #global VERSION_FLAG
         """On connect callback.
 
         Resubscribe to all topics we were subscribed to and publish birth
@@ -158,7 +205,7 @@ class MqttClient:
             return
 
         self.connected = True
-        
+
         dispatcher_send(self.hass, MQTT_CONNECTION_STATE, True)
         _LOGGER.warning(
             "Connected to MQTT server %s:%s (%s)",
@@ -193,11 +240,11 @@ class MqttClient:
         """
         if not isinstance(topic, str):
             raise HomeAssistantError("Topic needs to be a string!")
-        
-        
+
+
         is_simple_match = not ("+" in topic or "#" in topic)
         subscription = Subscription(
-                topic,is_simple_match, _matcher_for_topic(topic), HassJob(msg_callback), qos, encoding
+                topic, is_simple_match, _matcher_for_topic(topic), HassJob(msg_callback), qos, encoding, subscription_id=None
             )
         self.subscriptions.append(subscription)
         self._matching_subscriptions.cache_clear()
@@ -260,7 +307,7 @@ class MqttClient:
         _LOGGER.warning("Disconnected ===============================================================")
         self.connected = False
         dispatcher_send(self.hass, MQTT_CONNECTION_STATE, False)
-        
+
         _LOGGER.warning(
             "Disconnected from MQTT server %s:%s (%s)",
             self.conf[CONF_BROKER],
@@ -302,7 +349,7 @@ class MqttClient:
     @lru_cache(2048)
     def _matching_subscriptions(self, topic: str) -> list[Subscription]:
         subscriptions: list[Subscription] = []
-        
+
         for subscription in self.subscriptions:
             if subscription.complex_matcher(topic):
                 subscriptions.append(subscription)
@@ -325,16 +372,45 @@ class MqttClient:
             payload: SubscribePayloadType = msg.payload
             if subscription.encoding is not None:
                 try:
-                    #gu
-                    msg.payload = msg.payload.rstrip(b'\x00')
+                    # 先去掉尾部 null 字节
+                    raw = msg.payload
+                    if isinstance(raw, bytes):
+                        raw = raw.rstrip(b'\x00')
 
-                    payload = msg.payload.decode(subscription.encoding)
-                except (AttributeError, UnicodeDecodeError):
-                    _LOGGER.warning(
-                        "Can't decode payload %s on %s with encoding %s (for %s)",
-                        msg.payload[0:8192],
+                    # 尝试按订阅编码解码（通常是 utf-8）
+                    if isinstance(raw, bytes):
+                        payload = raw.decode(subscription.encoding)
+                    else:
+                        payload = raw
+                except UnicodeDecodeError:
+                    # UTF-8 解码失败，尝试 GBK/GB18030 兜底
+                    # 部分 IoT 设备固件会发送 GBK 编码数据或混入非法 UTF-8 字节
+                    try:
+                        raw_fallback = msg.payload
+                        if isinstance(raw_fallback, bytes):
+                            raw_fallback = raw_fallback.rstrip(b'\x00')
+                        payload = raw_fallback.decode('utf-8', errors='replace')
+                        _LOGGER.warning(
+                            "Payload on %s failed utf-8 decode, fallback to gbk (for %s)",
+                            msg.topic,
+                            subscription.job,
+                        )
+                    except Exception as exc2:
+                        _LOGGER.error(
+                            "Can't decode payload on %s with encoding %s (gbk fallback also failed): %s (for %s)",
+                            msg.topic,
+                            subscription.encoding,
+                            exc2,
+                            subscription.job,
+                        )
+                        continue
+                except (AttributeError, TypeError) as exc:
+                    # msg.payload 可能已经是字符串或其他类型（paho-mqtt 不同版本行为不同）
+                    payload = msg.payload
+                    _LOGGER.debug(
+                        "Payload already decoded or unexpected type on %s: type=%s (for %s)",
                         msg.topic,
-                        subscription.encoding,
+                        type(payload).__name__,
                         subscription.job,
                     )
                     continue

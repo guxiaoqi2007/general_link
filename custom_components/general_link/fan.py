@@ -86,7 +86,7 @@ class CustomFan(FanEntity, ABC):
 
         self.config_entry = config_entry
 
-        self._attr_a109 = config["a109"]
+        self._attr_a109 = config.get("a109",0)
 
         self._attr_speed_count = 3
 

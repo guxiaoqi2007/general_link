@@ -1,8 +1,6 @@
-import asyncio
 import logging
 import aiohttp
 import json
-import re
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -21,6 +19,7 @@ class HttpRequest:
         self.hass = hass
         self.username = username
         self.password = password
+        self.manufacturer = manufacturer
         self.response_data = None
         self.url = url
         self.headers = {
@@ -46,19 +45,17 @@ class HttpRequest:
         data: str = None,
     ):
         session = async_get_clientsession(self.hass)
+        self.response_data = None
         try:
-            if method.lower() == "get":
-                async with session.get(url, params=params, headers=headers) as response:
-                    await self._handle_response(response)
-            elif method.lower() == "post":
-                async with session.post(
-                    url, params=params, headers=headers, data=data
-                ) as response:
-                    await self._handle_response(response)
-            else:
+            if method.lower() not in ("get", "post"):
                 raise ValueError(f"Unsupported HTTP method: {method}")
+            request = session.get if method.lower() == "get" else session.post
+            async with request(
+                url, params=params, headers=headers, data=data, ssl=False
+            ) as response:
+                await self._handle_response(response)
         except aiohttp.ClientError as e:
-            _LOGGER.error(f"Failed to send request: {e}")
+            _LOGGER.error("Failed to send request: %s", e)
 
     async def _handle_response(self, response):
         if response.status == 200:
@@ -85,7 +82,11 @@ class HttpRequest:
             "POST",
             params=self.params,
             headers=self.headers,
-            data=f"username={self.username}&password={self.password}",
+            data={
+                "username": self.username,
+                "password": self.password,
+                "manufacturer": self.manufacturer,
+            },
         )
         # if self.response_data ["code"] == 200:
         #   return True
@@ -97,27 +98,22 @@ class HttpRequest:
         return await self.get_envkey()
 
     async def get_envkey(self):
-        dict_data_by_envKey = {}
         # await self._server_login()
         # response_env  = None
 
-        if self.response_data["code"] == 200:
+        if self.response_data is not None and self.response_data.get("code") == 200:
             await self._send_http_request(
                 f"https://{self.url}/env/queryEnvList",
                 "GET",
                 params=self.params,
                 headers=self.headers,
             )
-            if self.response_data is not None:
-                dict_data_by_envKey = {
-                    item["envKey"]: item for item in self.response_data["data"]
-                }
-                return dict_data_by_envKey
-            else:
-                _LOGGER.error("Failed to get a successful response.")
-                return None
-        else:
-            return self.response_data
+            data = (self.response_data or {}).get("data")
+            if data is not None:
+                return {item["envKey"]: item for item in data}
+            _LOGGER.error("Failed to get a successful response.")
+            return None
+        return self.response_data
 
     async def get_backupfile(self, envKey):
         # await self._server_login()
@@ -125,22 +121,23 @@ class HttpRequest:
         if self.response_data is None:
             await self._server_login()
 
+        if self.response_data is None or self.response_data.get("code") != 200:
+            return None
+
         _params = self.params.copy()
         _params["envKey"] = envKey
         _params["orderDesc"] = "true"
 
-        if self.response_data["code"] == 200:
-            await self._send_http_request(
-                f"https://{self.url}/device-file/getBackupFileList",
-                "GET",
-                params=_params,
-                headers=self.headers,
-            )
-            if self.response_data is not None:
-                return self.response_data
-            else:
-                _LOGGER.error("Failed to get a successful response.")
-                return None
+        await self._send_http_request(
+            f"https://{self.url}/device-file/getBackupFileList",
+            "GET",
+            params=_params,
+            headers=self.headers,
+        )
+        if self.response_data is not None:
+            return self.response_data
+        _LOGGER.error("Failed to get a successful response.")
+        return None
 
 
 class NetmoonMusicClient:
@@ -168,9 +165,9 @@ class NetmoonMusicClient:
                 if resp_json.get("code") == 200:
                     return resp_json.get("data", {})
                 elif resp_json.get("code") == 401:
-                    await self.logout()
+                    self.token = None
         except aiohttp.ClientError as e:
-            print(f"Network error: {e}")
+            _LOGGER.error("Network error: %s", e)
             return {"code": 500, "msg": str(e)}
 
     async def login(self, password: str):
@@ -198,7 +195,7 @@ class NetmoonMusicClient:
             async with self.session.get(url) as response:
                 return await response.json()
         except aiohttp.ClientError as e:
-            print(f"Network error: {e}")
+            _LOGGER.error("Network error: %s", e)
             return {"code": 500, "msg": str(e)}
 
     async def set_password(self, password: str):
@@ -212,7 +209,7 @@ class NetmoonMusicClient:
             ) as response:
                 return await response.json()
         except aiohttp.ClientError as e:
-            print(f"Network error: {e}")
+            _LOGGER.error("Network error: %s", e)
             return {"code": 500, "msg": str(e)}
 
     async def set_headphone_volume(self, volume: int):

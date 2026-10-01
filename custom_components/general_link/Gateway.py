@@ -30,6 +30,7 @@ from homeassistant.helpers.storage import Store
 _LOGGER = logging.getLogger(__name__)
 INPUT_SCHEMA = ["a100", "a101", "a102", "a103"]
 SOURCE_TYPE = {
+    0:"未知",
     1: "云端",
     2: "移动端APP",
     3: "场所管理中心（主网关）",
@@ -215,6 +216,10 @@ class Gateway:
 
         self._response_data = {}
 
+        self._sync_delay_task = None
+
+        self._custom_unsubs = []
+
         """Lighting Control Type"""
         self.light_device_type = entry.data[CONF_LIGHT_DEVICE_TYPE]
 
@@ -251,6 +256,10 @@ class Gateway:
 
     async def disconnect(self):
         """Disconnect gateway MQTT connection"""
+
+        if self._sync_delay_task is not None:
+            self._sync_delay_task.cancel()
+            self._sync_delay_task = None
 
         mqtt_client: MqttClient = self.hass.data[MQTT_CLIENT_INSTANCE]
 
@@ -358,6 +367,13 @@ class Gateway:
             _LOGGER.warning("JSON None")
             return
 
+        try:
+            await self._process_parsed_message(topic, payload)
+        except (ValueError, KeyError, TypeError) as err:
+            _LOGGER.error("消息处理异常 topic=%s: %s", topic, err)
+
+    async def _process_parsed_message(self, topic, payload):
+        """Process parsed message by topic"""
         if topic.endswith("p5"):
             seq = payload["seq"]
 
@@ -529,11 +545,11 @@ class Gateway:
         #        self.room_list.append(room_id)
         #    await self.sync_group_status(True)
         elif topic.endswith("p55"):
-            reversed_dict = {value: key for key, value in self.media_player_sn.items()}
+            reversed_seqdict = {value: key for key, value in self.media_player_sn.items()}
 
             async_dispatcher_send(
                 self.hass,
-                EVENT_ENTITY_STATE_UPDATE.format(reversed_dict[payload["seq"]]),
+                EVENT_ENTITY_STATE_UPDATE.format(reversed_seqdict[payload["seq"]]),
                 payload["data"],
             )
         elif topic.endswith("p82"):
@@ -735,10 +751,16 @@ class Gateway:
             await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 1)
             # await self._async_mqtt_publish("P/0/center/q51", data, 1)
         else:
-            # 延迟15s 刷新
-            await asyncio.sleep(15)
-            await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 2)
+            if self._sync_delay_task is not None:
+                self._sync_delay_task.cancel()
+            self._sync_delay_task = self.hass.async_create_task(
+                self._delayed_sync_group_status(data)
+            )
         # await self._async_mqtt_publish("P/0/center/q51", data, 2)
+
+    async def _delayed_sync_group_status(self, data):
+        await asyncio.sleep(15)
+        await self._async_mqtt_publish(f"P/{self.mqttAddr}/center/q82", data, 2)
 
     async def _add_entity(self, component: str, device: dict):
         """Add child device information"""
@@ -891,11 +913,10 @@ class Gateway:
         return await self._async_mqtt_publish(topic, data, seq=n_id)
 
     async def mqtt_subscribe_custom(self, subscribe_topic) -> None:
-        self.unsubscribe_temp = await self.hass.data[
-            MQTT_CLIENT_INSTANCE
-        ].async_subscribe(
+        unsub = await self.hass.data[MQTT_CLIENT_INSTANCE].async_subscribe(
             subscribe_topic, self._async_mqtt_subscribe_custom, 0, "utf-8"
         )
+        self._custom_unsubs.append(unsub)
         # await self.reconnect(self._entry)
 
     async def _async_mqtt_subscribe_custom(self, msg):
@@ -934,8 +955,8 @@ class Gateway:
                 # store = Store(self.hass, 1, f'test/{topic}')
                 # await store.async_save(payload["data"])
 
-            except ValueError:
-                _LOGGER.warning("Unable to parse JSON: '%s'", payload)
+            except (ValueError, KeyError, TypeError) as err:
+                _LOGGER.warning("处理消息异常 topic=%s: %s", topic, err)
                 return
         else:
             _LOGGER.warning("JSON None")
@@ -949,9 +970,9 @@ class Gateway:
             {"title": topic, "message": message, "notification_id": seq},
             blocking=True,
         )
-        if self.unsubscribe_temp is not None:
-            self.unsubscribe_temp()
-            self.unsubscribe_temp = None
+        unsubs, self._custom_unsubs = self._custom_unsubs, []
+        for unsub in unsubs:
+            unsub()
 
     async def _async_mqtt_publish(self, topic: str, data: object, seq=2):
 
@@ -1004,15 +1025,15 @@ class Gateway:
                 item["时间"] = readable_time
 
             if data_s_t is not None:
-                item["s"]["t"] = SOURCE_TYPE[data_s_t]
+                item["s"]["t"] = SOURCE_TYPE.get(data_s_t, "未知")
                 item["源信息"] = item["s"]
                 del item["s"]
             if data_d_t is not None:
-                item["d"]["t"] = DESTINATION_TYPE[data_d_t]
+                item["d"]["t"] = DESTINATION_TYPE.get(data_d_t, "未知")
                 item["目的信息"] = item["d"]
                 del item["d"]
             if data_r_t is not None:
-                item["r"]["t"] = SOURCE_TYPE[data_r_t]
+                item["r"]["t"] = SOURCE_TYPE.get(data_r_t, "未知")
                 item["记录信息"] = item["r"]
                 del item["r"]
             if data_i == 0x00000501:
@@ -1021,49 +1042,49 @@ class Gateway:
 
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.task_automation_map[int(item['m'][0])]}"
-                    item["m"][1] = f"{item['m'][1]}-{self.scene_map[int(item['m'][1])]}"
+                    ] = f"{item['m'][0]}-{self.task_automation_map.get(int(item['m'][0]), '未知')}"
+                    item["m"][1] = f"{item['m'][1]}-{self.scene_map.get(int(item['m'][1]), '未知')}"
             elif data_i == 65953:
                 item["i"] = "打开灯组"
                 if self.light_group_map is not None:
 
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+                    ] = f"{item['m'][0]}-{self.room_map.get(int(item['m'][0]), {}).get('name', '未知房间')}"
                     item["m"][
                         1
-                    ] = f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+                    ] = f"{item['m'][1]}-{self.light_group_map.get(int(item['m'][1]), {}).get('name', '未知灯组')}"
             elif data_i == 65952:
                 item["i"] = "关闭灯组"
                 if self.light_group_map is not None:
 
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+                    ] = f"{item['m'][0]}-{self.room_map.get(int(item['m'][0]), {}).get('name', '未知房间')}"
                     item["m"][
                         1
-                    ] = f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+                    ] = f"{item['m'][1]}-{self.light_group_map.get(int(item['m'][1]), {}).get('name', '未知灯组')}"
             elif data_i >= 0x000101A2 and data_i <= 0x000101AA:
                 item["i"] = "调节灯组"
                 if self.light_group_map is not None:
 
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+                    ] = f"{item['m'][0]}-{self.room_map.get(int(item['m'][0]), {}).get('name', '未知房间')}"
                     item["m"][
                         1
-                    ] = f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
+                    ] = f"{item['m'][1]}-{self.light_group_map.get(int(item['m'][1]), {}).get('name', '未知灯组')}"
             elif data_i >= 0x000103A0 and data_i <= 0x000103AB:
                 item["i"] = "控制窗帘组"
                 if self.room_map is not None:
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+                    ] = f"{item['m'][0]}-{self.room_map.get(int(item['m'][0]), {}).get('name', '未知房间')}"
                     # item['m'][1]= f"{item['m'][1]}-{self.light_group_map[int(item['m'][1])]['name']}"
 
             elif data_i == 0x00000600:
                 item["i"] = "执行场景"
-                item["m"][0] = f"{item['m'][0]}-{self.scene_map[int(item['m'][0])]}"
+                item["m"][0] = f"{item['m'][0]}-{self.scene_map.get(int(item['m'][0]), '未知')}"
             elif data_i == 0x00010200:
                 item["i"] = "关闭继电器"
             elif data_i == 0x00010201:
@@ -1078,13 +1099,15 @@ class Gateway:
                 if self.room_map is not None:
                     item["m"][
                         0
-                    ] = f"{item['m'][0]}-{self.room_map[int(item['m'][0])]['name']}"
+                    ] = f"{item['m'][0]}-{self.room_map.get(int(item['m'][0]), {}).get('name', '未知房间')}"
 
-            item["控制"] = item["i"]
-            item["消息"] = NMNLOG_TEMPLATES[data_i].format(*item["m"])
+            item["控制"] = data_i
+            template = NMNLOG_TEMPLATES.get(data_i)
+            if template is not None:
+                item["消息"] = template.format(*item["m"])
 
-            del item["t"]
-            del item["m"]
+            item.pop("t", None)
+            item.pop("m", None)
             if item.get("u") is not None:
                 del item["u"]
             if item.get("p") is not None:
