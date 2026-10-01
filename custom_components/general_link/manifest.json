@@ -4,10 +4,10 @@
   "codeowners": ["@leonardlcl"],
   "config_flow": true,
   "dependencies": ["mqtt"],
-  "documentation": "https://github.com/leonardlcl/general_link",
+  "documentation": "https://github.com/guxiaoqi/general_link",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/leonardlcl/general_link/issues",
+  "issue_tracker": "https://github.com/guxiaoqi/general_link/issues",
   "requirements": [],
-  "version": "v1.7.6",
+  "version": "v1.7.7",
   "zeroconf": ["_mqtt._tcp.local."]
 }
